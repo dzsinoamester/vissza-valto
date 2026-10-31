@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vissza! — a legközelebbi palackvisszaváltó automata</title>
+<meta name="description" content="Talád meg a hozzád legközelebbi MOHU REpont visszaváltó automatát vagy kézi pontot. Sötét térkép, útvonal, nyitvatartás, SOS mód, visszajelzés.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='20' fill='%23D8E02F'/%3E%3Cpath d='M27 11h10v5.5l4.5 7.5v23.5a4.5 4.5 0 0 1-4.5 4.5H27a4.5 4.5 0 0 1-4.5-4.5V24L27 16.5z' fill='%23000000'/%3E%3Crect x='26.5' y='33' width='11' height='9' rx='2.5' fill='%23D8E02F'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dist/maplibre-gl.css" rel="stylesheet">
+<link href="css/styles.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="stage">
+  <div id="map" aria-label="REpontok térképe"></div>
+  <div class="map-scrim" aria-hidden="true"></div>
+
+  <!-- ================= Fejléc ================= -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="34" height="34">
+          <defs>
+            <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#F2FA5A"/><stop offset=".55" stop-color="#D8E02F"/><stop offset="1" stop-color="#A9E84A"/>
+            </linearGradient>
+          </defs>
+          <rect width="64" height="64" rx="20" fill="url(#lg)"/>
+          <path d="M27 11h10v5.5l4.5 7.5v23.5a4.5 4.5 0 0 1-4.5 4.5H27a4.5 4.5 0 0 1-4.5-4.5V24L27 16.5z" fill="#05070B"/>
+          <rect x="26.5" y="33" width="11" height="9" rx="2.5" fill="url(#lg)"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <strong>Vissza<span class="accent">!</span></strong>
+        <small>palackvisszaváltó pontok</small>
+      </span>
+    </div>
+
+    <div class="topbar-stats" id="topStats">
+      <span class="stat"><b id="statAll">–</b>pont</span>
+      <span class="stat stat-auto"><b id="statAuto">–</b>automata</span>
+      <span class="stat stat-kezi"><b id="statKezi">–</b>kézi</span>
+    </div>
+
+    <button class="btn-sos" id="sosBtn" type="button" aria-pressed="false"
+            title="Legközelebbi NYITOTT visszaváltó pont">
+      <svg class="ico-tri" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M12 2 1 21h22L12 2zm1 14h-2v-2h2v2zm0-4h-2V9h2v3z" fill="currentColor"/></svg>
+      <svg class="ico-bolt" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M13.2 2 4.5 13.6h6.1L9.8 22l9.7-12.3h-6.3L13.2 2z" fill="currentColor"/></svg>
+      <span>SOS</span>
+    </button>
+  </header>
+
+  <!-- ================= Bal oldali panel ================= -->
+  <aside class="panel" id="panel">
+    <div class="panel-grip" id="panelGrip" aria-hidden="true"></div>
+
+    <!-- Oldalfejléc (csak telefon/tablet) -->
+    <div class="page-head">
+      <span class="overlay-eyebrow">Keresés</span>
+      <h3>Találd meg a legközelebbi pontot</h3>
+    </div>
+
+    <!-- Keresés -->
+    <div class="search-block">
+      <div class="search-box">
+        <svg class="search-ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z" fill="currentColor"/></svg>
+        <input type="search" id="searchInput" placeholder="Település, bolt vagy cím…" autocomplete="off" aria-label="Keresés">
+        <button class="search-clear" id="searchClear" type="button" hidden aria-label="Keresés törlése">✕</button>
+      </div>
+      <div class="search-suggest" id="searchSuggest" hidden></div>
+
+      <div class="search-actions">
+        <button class="btn btn-ghost" id="locateBtn" type="button">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.99 8.99 0 0 0 13 3.06V1h-2v2.06A8.99 8.99 0 0 0 3.06 11H1v2h2.06A8.99 8.99 0 0 0 11 20.94V23h2v-2.06A8.99 8.99 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 0 1-7-7 7 7 0 0 1 7-7 7 7 0 0 1 7 7 7 7 0 0 1-7 7z" fill="currentColor"/></svg>
+          Itt vagyok
+        </button>
+        <button class="btn btn-ghost" id="resetBtn" type="button">Alaphelyzet</button>
+      </div>
+    </div>
+
+    <!-- Szűrők -->
+    <div class="filters" role="group" aria-label="Szűrők">
+      <button class="chip is-active" data-filter="all" type="button">Összes</button>
+      <button class="chip chip-auto" data-filter="automata" type="button">Automata</button>
+      <button class="chip chip-kezi" data-filter="kezi" type="button">Kézi</button>
+      <button class="chip chip-open" data-filter="open" type="button">Most nyitva</button>
+      <button class="chip chip-rate" data-filter="rated" type="button">Értékelt</button>
+    </div>
+
+    <!-- Rendezés -->
+    <div class="sortbar" id="sortbar" role="group" aria-label="Rendezés">
+      <span class="sortbar-label">Rendezés</span>
+      <button class="sort is-active" data-sort="dist" type="button">Távolság</button>
+      <button class="sort" data-sort="rating" type="button">Legjobbra értékelt</button>
+    </div>
+
+    <!-- Találatok -->
+    <div class="results-head">
+      <span id="resultsLabel">Legközelebbi pontok</span>
+      <span class="results-count" id="resultsCount"></span>
+    </div>
+    <div class="results" id="results" role="list"></div>
+  </aside>
+
+  <!-- ================= Útvonal-kártya ================= -->
+  <div class="route-card" id="routeCard" hidden>
+    <div class="route-head">
+      <span class="route-eyebrow">Útvonal</span>
+      <button class="route-close" id="routeClose" type="button" aria-label="Útvonal bezárása">✕</button>
+    </div>
+
+    <div class="route-modes" id="routeModes" role="group" aria-label="Közlekedési mód">
+      <button class="rmode is-active" data-mode="driving" type="button">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M18.9 6.5A1.5 1.5 0 0 0 17.5 5h-11a1.5 1.5 0 0 0-1.4 1L3.2 12c-.4 1.4.2 2.9 1.5 3.4V19a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h8.6v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-3.6c1.3-.5 1.9-2 1.5-3.4l-1.9-5.5zM6.5 16A1.5 1.5 0 1 1 8 14.5 1.5 1.5 0 0 1 6.5 16zm11 0a1.5 1.5 0 1 1 1.5-1.5 1.5 1.5 0 0 1-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" fill="currentColor"/></svg>
+        Autó
+      </button>
+      <button class="rmode" data-mode="cycling" type="button">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M15.5 5.5a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-3.6 4.5L9.4 6.9l1.2-2.1a3 3 0 0 0-1.1.3A5 5 0 1 0 14.4 16l-2.5-6zm-6.4 8A3.5 3.5 0 1 1 9 18.5 3.5 3.5 0 0 1 5.5 18zm13 0a3.5 3.5 0 1 1-3.5-3.5 3.5 3.5 0 0 1 3.5 3.5z" fill="currentColor"/></svg>
+        Kerékpár
+      </button>
+      <button class="rmode" data-mode="foot" type="button">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M13.5 5.5a2 2 0 1 0-2-2 2 2 0 0 0 2 2zM9.8 22l1-5.5 2 2v5h2v-5.7l-2.1-2 .6-3A7.3 7.3 0 0 0 17 14v-2a5 5 0 0 1-3.8-2.4l-1-1.6a2 2 0 0 0-1.8-.9 2 2 0 0 0-1.7 1.3L7.2 12A4 4 0 0 0 9.4 15l-.8 7z" fill="currentColor"/></svg>
+        Gyalog
+      </button>
+    </div>
+
+    <div class="route-nums">
+      <div class="route-num">
+        <b id="routeDist">–</b>
+        <span>tvolság</span>
+      </div>
+      <div class="route-num">
+        <b id="routeTime">–</b>
+        <span>becsült idő</span>
+      </div>
+    </div>
+
+    <div class="route-to">
+      <span class="route-to-dot"></span>
+      <div>
+        <b id="routeName">–</b>
+        <span id="routeAddr"></span>
+      </div>
+    </div>
+
+    <div class="route-steps" id="routeSteps" hidden></div>
+    <button class="route-steps-toggle" id="routeStepsToggle" type="button" hidden>Lépések megjelenítése</button>
+
+    <div class="route-actions">
+      <button class="btn btn-primary btn-start" id="routeStart" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+        Indítás
+      </button>
+      <button class="btn btn-ghost" id="routeDetail" type="button">Részletek</button>
+      <a class="btn btn-ghost" id="routeGo" href="#" target="_blank" rel="noopener">Google</a>
+    </div>
+  </div>
+
+  <!-- Lebegő réteg (telefon/tablet): SOS + szűrő/helyzet + legközelebbi pontok -->
+  <div class="float-stack" id="floatStack">
+    <div class="float-row">
+      <div class="map-tools" id="mapTools">
+        <button class="map-tool" id="toolFilter" type="button" title="Szűrők" aria-label="Szűrők">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
+        </button>
+        <button class="map-tool" id="toolLocate" type="button" title="Itt vagyok" aria-label="Itt vagyok">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="8.4"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Gyors sáv: két legközelebbi pont pontszám-jelvénnyel + indulás -->
+    <div class="qbar" id="qbar" hidden>
+      <div class="qbar-list" id="qbarList"></div>
+      <button class="qbar-go" id="qbarGo" type="button" title="Indítás a legközelebbi ponthoz">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Alsó dokk (telefon + tablet) -->
+  <nav class="dock" id="dock" aria-label="Navigáció">
+    <button class="dock-btn" id="dockTop" type="button" title="Legjobbra értékelt pontok">
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5.5h3V7a3 3 0 0 1-3 3M7 5.5H4V7a3 3 0 0 0 3 3"/></svg>
+      <span class="dock-label">Ranglista</span>
+    </button>
+    <button class="dock-btn is-active" id="dockMap" type="button" title="Térkép">
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>
+      <span class="dock-label">Térkép</span>
+    </button>
+    <button class="dock-btn" id="dockProfile" type="button" title="Profilom">
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.3 18.4a7 7 0 0 1 11.4 0"/></svg>
+      <span class="dock-label">Profil</span>
+    </button>
+    <button class="dock-btn" id="dockSearch" type="button" title="Keresés">
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <span class="dock-label">Keresés</span>
+    </button>
+  </nav>
+
+  <!-- Iránytű / SOS — teljes képernyős -->
+  <div class="sos-view" id="sosView" hidden>
+    <div class="sos-glow" aria-hidden="true"></div>
+    <button class="sos-close" id="sosClose" type="button" aria-label="SOS bezárása">✕</button>
+
+    <div class="sos-top">
+      <span class="sos-pulse" aria-hidden="true"></span>
+      <span class="sos-eyebrow">SOS mód · a legközelebbi NYITOTT pont</span>
+    </div>
+
+    <div class="sos-center">
+      <div class="sos-compass">
+        <div class="sos-ring">
+          <svg id="sosArrow" viewBox="0 0 100 100" width="150" height="150" aria-hidden="true">
+            <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(216,224,47,.16)" stroke-width="2"/>
+            <circle cx="50" cy="50" r="46" fill="none" stroke="#D8E02F" stroke-width="2.5" stroke-dasharray="3 11" stroke-linecap="round"/>
+            <circle cx="50" cy="50" r="37" fill="rgba(216,224,47,.07)"/>
+            <path d="M50 16 L61 56 L50 48 L39 56 Z" fill="#D8E02F" stroke="#05070B" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="sos-dist" id="sosDist">–</div>
+        <div class="sos-dist-label">távolság</div>
+      </div>
+
+      <div class="sos-body">
+        <div class="sos-badge" id="sosBadge">NYITVA</div>
+        <h3 id="sosName">Keresés…</h3>
+        <p id="sosAddr"></p>
+        <div class="sos-actions">
+          <button class="btn btn-primary" id="sosGo" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+            Indulás
+          </button>
+          <button class="btn btn-ghost" id="sosNext" type="button">Következő</button>
+          <button class="btn btn-ghost" id="sosDetail" type="button">Részletek</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sos-more">
+      <div class="sos-more-head">További nyitott pontok a közelben</div>
+      <div class="sos-more-list" id="sosMoreList"></div>
+    </div>
+  </div>
+
+  <!-- ============ Navigációs HUD (appon belüli turn-by-turn) ============ -->
+  <div class="navview" id="navView" hidden>
+    <div class="nav-maneuver">
+      <div class="nav-arrow" id="navArrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="42" height="42"><path d="M12 3 4 12h4v8h8v-8h4z" fill="currentColor" transform="rotate(180 12 12)"/></svg>
+      </div>
+      <div class="nav-turn">
+        <b id="navDist">–</b>
+        <span id="navStreet">…</span>
+      </div>
+    </div>
+
+    <div class="nav-summary">
+      <div class="nav-eta"><b id="navEta">–</b><span>Érkezés</span></div>
+      <div class="nav-remain"><b id="navRemain">–</b><span>Hátra</span></div>
+      <div class="nav-total"><b id="navTotal">–</b><span>Távolság</span></div>
+      <button class="nav-nextprev" id="navPreview" type="button" title="Következő lépés előnézete">›</button>
+      <button class="nav-exit" id="navExit" type="button" title="Navigáció befejezése">✕</button>
+    </div>
+
+    <div class="nav-next" id="navNext" hidden></div>
+  </div>
+
+  <!-- ============ Megérkeztél ============ -->
+  <div class="arrive" id="arrive" hidden>
+    <div class="arrive-check">
+      <svg viewBox="0 0 24 24" width="46" height="46" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" fill="currentColor"/></svg>
+    </div>
+    <h2>Megérkeztél!</h2>
+    <p id="arriveName">–</p>
+    <button class="btn btn-primary" id="arriveOk" type="button">Rendben</button>
+  </div>
+
+  <!-- ============ Ranglista / Profil ============ -->
+  <div class="overlay" id="overlay" hidden>
+    <div class="overlay-card">
+      <button class="overlay-close" id="overlayClose" type="button" aria-label="Bezárás">✕</button>
+      <span class="overlay-eyebrow" id="overlayEyebrow">Profil</span>
+      <h3 id="overlayTitle">–</h3>
+      <div id="overlayBody"></div>
+    </div>
+  </div>
+
+  <!-- Betöltés -->
+  <div class="loader" id="loader">
+    <div class="loader-logo">Vissza<b>!</b></div>
+    <div class="loader-bar"><i></i></div>
+    <p>REpontok betöltése…</p>
+  </div>
+</div>
+
+<!-- ================= Részletek (bottom sheet) ================= -->
+<div class="sheet-scrim" id="sheetScrim" hidden></div>
+<section class="sheet" id="sheet" hidden aria-modal="true" role="dialog">
+  <div class="sheet-grip" aria-hidden="true"></div>
+  <button class="sheet-close" id="sheetClose" type="button" aria-label="Bezárás">✕</button>
+
+  <div class="sheet-type" id="sheetType">AUTOMATA</div>
+  <h2 id="sheetName">–</h2>
+  <div class="sheet-addr" id="sheetAddr">–</div>
+
+  <div class="sheet-status">
+    <span id="sheetStatus"></span>
+    <span class="sheet-dist" id="sheetDist"></span>
+    <span class="sheet-rate" id="sheetRate" hidden></span>
+  </div>
+
+  <table class="hours" id="sheetHours">
+    <tbody></tbody>
+  </table>
+
+  <div class="sheet-actions">
+    <button class="btn btn-primary" id="sheetRoute" type="button">
+      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M6.4 2.5 2 6.9l4.4 4.4 1.4-1.4L4.8 7.3l1.6-1.6 3 3 1.4-1.4-3-3.1A2 2 0 0 0 6.4 2.5zM12 11h7a3 3 0 0 1 3 3v1.5a4.5 4.5 0 0 1-9 0V13h2v2.5a2.5 2.5 0 0 0 5 0V14a1 1 0 0 0-1-1h-7v2h2v1.5a4.5 4.5 0 0 1-9 0V14a3 3 0 0 1 3-3z" fill="currentColor"/></svg>
+      Útvonal ide
+    </button>
+    <a class="btn btn-ghost" id="navGoogle" href="#" target="_blank" rel="noopener">Google</a>
+    <a class="btn btn-ghost" id="navWaze" href="#" target="_blank" rel="noopener">Waze</a>
+    <a class="btn btn-ghost" id="navApple" href="#" target="_blank" rel="noopener">Apple</a>
+    <button class="btn btn-ghost" id="copyAddr" type="button">Cím másolása</button>
+  </div>
+
+  <!-- ============ Visszajelzés ============ -->
+  <div class="feedback" id="feedback">
+    <div class="fb-head">
+      <span class="fb-eyebrow">Visszajelzés</span>
+      <h3>Milyen volt itt visszaváltani?</h3>
+      <p class="fb-sub">Az értékelésed segít a többieknek. Csak ezen az eszközön tárolódik.</p>
+    </div>
+
+    <div class="fb-scores" id="fbScores" role="radiogroup" aria-label="Pontszám 1-től 10-ig"></div>
+
+    <div class="fb-tags" id="fbTags" role="group" aria-label="Címkék"></div>
+
+    <label class="fb-note-label" for="fbNote">Megjegyzés (nem kötelező)</label>
+    <textarea class="fb-note" id="fbNote" rows="2" maxlength="240"
+      placeholder="Pl. sorban álltam, elfogadta az összes palackot…"></textarea>
+
+    <div class="fb-actions">
+      <button class="btn btn-primary" id="fbSend" type="button">Visszajelzés küldése</button>
+      <button class="btn btn-ghost fb-del" id="fbDelete" type="button" hidden>Törlés</button>
+    </div>
+    <div class="fb-done" id="fbDone" hidden>
+      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" fill="currentColor"/></svg>
+      <span></span>
+    </div>
+  </div>
+
+  <div class="sheet-note">
+    A visszaváltás mindig az adott üzlet nyitvatartásához kötött. A betétdíj (50 Ft/db) bolti
+    utalványban, a REpont appban banki átutalással vagy jótékonysági felajánlásként térül vissza.
+  </div>
+</section>
+
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
