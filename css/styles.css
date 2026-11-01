@@ -834,6 +834,9 @@ a { color: inherit; }
 body.is-routing .qbar,
 body.is-nav .qbar { display: none; }
 body.is-nav .route-card,
+body.is-nav .topbar,
+body.is-nav .panel,
+body.is-nav .maplibregl-popup,
 body.is-nav .stage > .dock { display: none; }
 
 /* ===================== Menü (dokk) ===================== */
@@ -1239,6 +1242,13 @@ body.is-nav .stage > .dock { display: none; }
   color: var(--ink-2);
 }
 .nav-next .nav-next-ico { color: var(--lime); font-size: 16px; flex: none; }
+
+/* PC-n a navigációs HUD középre zárt kártyái (ne takarja a teljes képernyőt) */
+@media (min-width: 901px) {
+  .nav-maneuver { max-width: 720px; width: 100%; margin: 14px auto 0; }
+  .nav-summary  { max-width: 720px; width: 100%; margin: 0 auto; }
+  .nav-next     { max-width: 720px; width: 100%; margin: 8px auto 0; }
+}
 
 /* ===================== Megérkeztél ===================== */
 

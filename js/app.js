@@ -2699,6 +2699,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.navView.hidden = false;
     el.navNext.hidden = true;
     document.body.classList.add('is-nav');
+    closePopup();   // a HUD ne takarjon alatta kibukkanó pontkártyát
     recordVisit(state.route && state.route.point ? state.route.point.id : null);
     startWatch();
     if (state.me) navUpdate(state.me);
