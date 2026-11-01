@@ -650,6 +650,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     paintAccount();
     if (account.user) introHide();
     if (account.user) {
+      syncAvatarMeta();
       loadProfile();
       if (social.accountUser !== account.user.id) {
         social.accountUser = account.user.id;
@@ -677,20 +678,104 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (overlayKind === 'profile' && el.overlay && !el.overlay.hidden) openOverlay('profile');
   }
 
+  /* --- avatar (emoji + szín) --- */
+
+  var AV_KEY = 'vissza.avatar.v1';
+
+  var AV_EMOJI = [
+    '🦉', '🐱', '🐶', '🦊', '🐻', '🐼', '🐸', '🦁', '🐨', '🐰',
+    '🍾', '🍺', '🥤', '🍉', '🍎', '🥕', '🌽', '🍞', '🧀', '🍿',
+    '🌿', '🌸', '⭐', '🔥', '💡', '🚲', '🚗', '🛒', '♻️', '🐢'
+  ];
+
+  var AV_COLORS = [
+    { name: 'Lime',      bg: 'linear-gradient(135deg, #F0F66B, var(--lime))', fg: '#0A0B03' },
+    { name: 'Narancs',   bg: 'linear-gradient(135deg, #FFB088, #FF7A45)',     fg: '#2A0F04' },
+    { name: 'Égkék',     bg: 'linear-gradient(135deg, #8FD3FF, #3FA2FF)',     fg: '#04182B' },
+    { name: 'Rózsaszín', bg: 'linear-gradient(135deg, #FFB3D9, #FF6FB5)',     fg: '#2B0716' },
+    { name: 'Lila',      bg: 'linear-gradient(135deg, #C9B0FF, #8A5CFF)',     fg: '#150A2B' },
+    { name: 'Menta',     bg: 'linear-gradient(135deg, #9BF5D2, #2ED3A0)',     fg: '#04271C' },
+    { name: 'Citrom',    bg: 'linear-gradient(135deg, #FFF08A, #FFD23F)',     fg: '#2B2204' },
+    { name: 'Szürke',    bg: 'linear-gradient(135deg, #E7EAF0, #9AA3B2)',     fg: '#14161C' }
+  ];
+
+  // a fiók avatarja a user_metadata-ban él, vendégként a localStorage-ban
+  function avatarOf() {
+    var meta = account.user && account.user.user_metadata;
+    if (meta && meta.avatar && typeof meta.avatar === 'object') return meta.avatar;
+    return readJSON(AV_KEY, null);
+  }
+
+  function avatarSpan(av, extraCls) {
+    var cls = 'account-avatar' + (extraCls ? ' ' + extraCls : '');
+    if (av && av.e) {
+      var c = AV_COLORS[av.c] || AV_COLORS[0];
+      return '<span class="' + cls + ' av-emoji" aria-hidden="true"' +
+        ' style="background:' + c.bg + ';color:' + c.fg + '">' + av.e + '</span>';
+    }
+    var name = account.user ? displayName() : '';
+    return '<span class="' + cls + '" aria-hidden="true">' +
+      esc(String(name).trim().charAt(0).toUpperCase() || '?') + '</span>';
+  }
+
+  function avatarHtml() { return avatarSpan(avatarOf()); }
+
+  function setAvatar(av) {
+    av = { e: (av && av.e) || '', c: (av && av.c) || 0 };
+    writeJSON(AV_KEY, av);
+    if (sb && account.user) {
+      return sb.auth.updateUser({ data: { avatar: av } })
+        .then(function (res) {
+          if (res.error) throw res.error;
+          if (res.data && res.data.user) account.user = res.data.user;
+        })
+        .catch(function (e) { toast('Nem sikerült menteni: ' + authErr(e)); });
+    }
+    return Promise.resolve();
+  }
+
+  // bejelentkezéskor a fiók avatarja lesz az érvényes; ha még nincs a fiókban,
+  // de az eszközön már választottál, feltöltjük
+  function syncAvatarMeta() {
+    if (!sb || !account.user) return;
+    var meta = account.user.user_metadata;
+    if (meta && meta.avatar && typeof meta.avatar === 'object') {
+      writeJSON(AV_KEY, { e: meta.avatar.e || '', c: meta.avatar.c || 0 });
+      return;
+    }
+    var av = readJSON(AV_KEY, null);
+    if (av && av.e) {
+      sb.auth.updateUser({ data: { avatar: av } })
+        .then(function (res) {
+          if (!res.error && res.data && res.data.user) account.user = res.data.user;
+        })
+        .catch(function () { });
+    }
+  }
+
   function accountHeadHtml() {
     if (!account.user) {
       return '<div class="account-head">' +
-        '<span class="account-avatar">?</span>' +
+        avatarHtml() +
         '<div class="account-main"><b>Vendégként nézelődsz</b>' +
         '<small>Jelentkezz be, hogy az értékeléseid megmaradjanak.</small></div>' +
+        '<span class="p-head-acts">' +
+          '<button class="p-edit" type="button" data-account="avatar"' +
+            ' title="Avatar választása" aria-label="Avatar választása">😊</button>' +
+        '</span>' +
         '</div>';
     }
     var name = displayName();
-    var initial = String(name).trim().charAt(0).toUpperCase() || '?';
     return '<div class="account-head">' +
-      '<span class="account-avatar">' + esc(initial) + '</span>' +
+      avatarHtml() +
       '<div class="account-main"><b>' + esc(name) + '</b>' +
       '<small>' + esc(account.user.email || '') + '</small></div>' +
+      '<span class="p-head-acts">' +
+        '<button class="p-edit" type="button" data-account="avatar"' +
+          ' title="Avatar választása" aria-label="Avatar választása">😊</button>' +
+        '<button class="p-edit" type="button" data-account="name"' +
+          ' title="Név szerkesztése" aria-label="Megjelenített név szerkesztése">✎</button>' +
+      '</span>' +
       '</div>';
   }
 
@@ -841,6 +926,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   var FAV_KEY = 'vissza.favorites.v1';
   var VISIT_KEY = 'vissza.visits.v1';
+  var REPORT_KEY = 'vissza.reports.v1';      // helyi jelzésnapló (a "Segítő" jelvényhez)
   var REPORT_TTL = 2 * 60 * 60 * 1000;      // a jelzés ennyi ideig érvényes
 
   var REPORTS = {
@@ -981,6 +1067,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       })
       .then(function (res) {
         if (res.error) throw res.error;
+        // helyi jelzésnapló: a szerver csak a friss (3 óránál fiatalabb) sorokat engedi olvasni,
+        // ezért a "Segítő" jelvényt ebből a naplóból számoljuk
+        var log = readJSON(REPORT_KEY, []);
+        if (!Array.isArray(log)) log = [];
+        log.push(Date.now());
+        writeJSON(REPORT_KEY, log.slice(-500));
         toast('Köszönjük! A jelzés 2 óráig látszik.');
         return refreshSocial();
       })
@@ -1183,6 +1275,447 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.recentMeta.textContent = bits.join(' · ');
     el.recentCard.hidden = false;
     el.recentGo.onclick = function () { startRoute(p, null); };
+  }
+
+  /* ==================== profil: naplód, sorozat, jelvények ==================== */
+
+  var ZIP_COUNTY = null;                    // irányítószám -> megye (data/zip-megye.json)
+  var zipTried = false;
+  var profExtra = { forUser: null, visits: null };   // fiók teljes látogatáslistája
+
+  function loadZipCounty() {
+    if (ZIP_COUNTY || zipTried) return Promise.resolve(ZIP_COUNTY);
+    zipTried = true;
+    return fetch('data/zip-megye.json', { cache: 'force-cache' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (j && typeof j === 'object') ZIP_COUNTY = j; return ZIP_COUNTY; })
+      .catch(function () { return null; });
+  }
+
+  // a MOHU adat nem tartalmaz megyét, azt az irányítószámból vezetjük le
+  function countyOf(p) {
+    return (ZIP_COUNTY && p && p.zip) ? (ZIP_COUNTY[String(p.zip)] || null) : null;
+  }
+
+  function reportLog() {
+    var list = readJSON(REPORT_KEY, []);
+    return Array.isArray(list) ? list : [];
+  }
+
+  function dayKey(ts) {
+    var d = new Date(ts);
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+
+  // hány napja folyamatosan van aktivitás (a mai vagy a tegnapi nappal bezárólag)
+  function streakDays(keys) {
+    var set = {};
+    keys.forEach(function (k) { set[k] = true; });
+    var d = new Date();
+    if (!set[dayKey(d.getTime())]) d.setDate(d.getDate() - 1);
+    var n = 0;
+    while (set[dayKey(d.getTime())]) { n++; d.setDate(d.getDate() - 1); }
+    return n;
+  }
+
+  function fmtWhen(ts) {
+    var d = new Date(ts);
+    return d.toLocaleDateString('hu-HU') + ' ' +
+      d.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function tagLabel(t) {
+    return (FB_TAGS.filter(function (x) { return x.id === t; })[0] || {}).label || t;
+  }
+
+  // a megjelenített látogatások (fióknál a szerverről is bővülhet a lista)
+  function profVisits() {
+    return (profExtra.visits || social.visits).slice(0, 8);
+  }
+
+  // látogatás + értékelés dátumai napkulcsokra bontva (a sorozathoz)
+  function activityKeys() {
+    var keys = {}, add = function (ts) { if (ts) keys[dayKey(ts)] = true; };
+    (profExtra.visits || social.visits).forEach(function (v) { add(v.at); });
+    var store = loadFbStore();
+    Object.keys(store).forEach(function (id) { add(store[id].at); });
+    return Object.keys(keys);
+  }
+
+  function badgeStates() {
+    var store = loadFbStore();
+    var rateIds = Object.keys(store);
+    var visits = profExtra.visits || social.visits;
+
+    var ratedN = rateIds.length;
+    var reportN = reportLog().length;
+
+    // megyék: a látogatott + értékelt pontok irányítószámai alapján
+    var pts = {};
+    visits.forEach(function (v) { pts[v.id] = true; });
+    rateIds.forEach(function (id) { pts[id] = true; });
+    var counties = {};
+    Object.keys(pts).forEach(function (id) {
+      var c = countyOf(state.byId.get(+id));
+      if (c) counties[c] = true;
+    });
+    var countyN = Object.keys(counties).length;
+
+    // éjszakai bagoly: éjfél és reggel 5 óra között mentett értékelés
+    var night = rateIds.some(function (id) {
+      var at = store[id] && store[id].at;
+      if (!at) return false;
+      var h = new Date(at).getHours();
+      return h >= 0 && h < 5;
+    });
+
+    return [
+      { ico: '🍾', name: 'Első visszaváltás', unit: 'visszaváltás',
+        desc: 'Az első látogatásod rögzítve', got: visits.length > 0, cur: visits.length ? 1 : 0, need: 1 },
+      { ico: '⭐', name: '10 értékelt pont', unit: 'értékelt pont',
+        desc: 'Tíz REpontot értékeltél', got: ratedN >= 10, cur: Math.min(ratedN, 10), need: 10 },
+      { ico: '🗺️', name: '5 megye', unit: 'megye',
+        desc: 'Öt különböző megyében váltottál', got: countyN >= 5, cur: Math.min(countyN, 5), need: 5 },
+      { ico: '🦉', name: 'Éjszakai bagoly', unit: 'jelvény',
+        desc: 'Éjfél után értékeltél', got: night, cur: night ? 1 : 0, need: 1 },
+      { ico: '🤝', name: 'Segítő', unit: 'jelentés',
+        desc: '5 üzemállapot-jelzés', got: reportN >= 5, cur: Math.min(reportN, 5), need: 5 }
+    ];
+  }
+
+  function profSection(title, inner, hint) {
+    if (!inner) return '';
+    return '<section class="p-sec">' +
+      '<div class="p-sec-head"><h3>' + esc(title) + '</h3>' +
+      (hint ? '<span>' + esc(hint) + '</span>' : '') + '</div>' +
+      '<div class="p-sec-body">' + inner + '</div>' +
+    '</section>';
+  }
+
+  function badgeHtml(b) {
+    return '<div class="p-badge' + (b.got ? ' is-got' : '') + '">' +
+      '<span class="p-badge-ico" aria-hidden="true">' + b.ico + '</span>' +
+      '<span class="p-badge-main"><b>' + esc(b.name) + '</b>' +
+      '<small>' + (b.got ? 'Megszerezve ✓' : esc(b.desc) + ' · ' + b.cur + '/' + b.need) + '</small></span>' +
+    '</div>';
+  }
+
+  // motivációs csík: melyik jelvény van a legközelebb
+  function progressHtml(badges) {
+    var pend = badges.filter(function (b) { return !b.got; });
+    if (!pend.length) {
+      return '<div class="p-prog is-done">' +
+        '<div class="p-prog-txt"><b>Mind az öt jelvényed megvan</b>' +
+        '<span>Ügyes vagy — jöhet egy újabb kör?</span></div>' +
+        '<div class="p-prog-bar"><i style="width:100%"></i></div>' +
+      '</div>';
+    }
+    var multi = pend.filter(function (b) { return b.need > 1; });
+    var pick = multi.length
+      ? multi.sort(function (a, b) { return (b.cur / b.need) - (a.cur / a.need); })[0]
+      : pend[0];
+    var pct = pick.need > 1 ? Math.max(5, Math.round(pick.cur / pick.need * 100)) : 0;
+    var txt = pick.need > 1 ? (pick.cur + '/' + pick.need + ' ' + pick.unit) : pick.name;
+    return '<div class="p-prog">' +
+      '<div class="p-prog-txt"><b>Következő jelvény: ' + esc(txt) + '</b>' +
+      '<span>' + esc(pick.desc) + '</span></div>' +
+      '<div class="p-prog-bar"><i style="width:' + pct + '%"></i></div>' +
+    '</div>';
+  }
+
+  function rateRowHtml(id, d) {
+    var p = state.byId.get(+id);
+    var bits = [];
+    if (d.at) bits.push(fmtWhen(d.at));
+    (d.tags || []).forEach(function (t) { bits.push(tagLabel(t)); });
+    return '<div class="rate-row" data-id="' + id + '">' +
+      scoreBadge(d.score) +
+      '<span class="rank-main"><b>' + esc(p ? p.name : ('#' + id)) + '</b>' +
+      '<small>' + esc(bits.join(' · ')) + '</small></span>' +
+      '<span class="p-row-acts">' +
+        '<button class="p-ico-btn" type="button" data-fbedit="' + id + '" title="Szerkesztés" aria-label="Értékelés szerkesztése">✎</button>' +
+        '<button class="p-ico-btn" type="button" data-fbdel="' + id + '" title="Törlés" aria-label="Értékelés törlése">🗑</button>' +
+      '</span>' +
+    '</div>';
+  }
+
+  function profileHtml() {
+    var store = loadFbStore();
+    var ids = Object.keys(store);
+    var visits = profVisits();
+    var favIds = Object.keys(social.favs).map(Number)
+      .filter(function (id) { return state.byId.has(id); });
+    var badges = badgeStates();
+    var out = [];
+
+    // motivációs sáv a tetején
+    out.push(progressHtml(badges));
+
+    // számok + sorozat
+    var sum = 0, best = null, tags = {};
+    ids.forEach(function (id) {
+      var d = store[id] || {};
+      sum += d.score || 0;
+      if (!best || (d.score || 0) > best.score) best = { id: id, score: d.score || 0 };
+      (d.tags || []).forEach(function (t) { tags[t] = (tags[t] || 0) + 1; });
+    });
+    var avg = ids.length ? (sum / ids.length).toFixed(1).replace('.', ',') : '–';
+    out.push('<div class="profile-stats">' +
+      '<div class="profile-stat"><b>' + ids.length + '</b><span>értékelt pont</span></div>' +
+      '<div class="profile-stat"><b>' + avg + '</b><span>átlag / 10</span></div>' +
+      '<div class="profile-stat"><b>' + (best ? best.score : '–') + '</b><span>legjobb</span></div>' +
+      '<div class="profile-stat is-streak"><b>' + streakDays(activityKeys()) + '</b><span>napos sorozat</span></div>' +
+    '</div>');
+
+    var bestP = best ? state.byId.get(+best.id) : null;
+    if (bestP) {
+      out.push('<div class="rank-row" data-id="' + bestP.id + '">' +
+        scoreBadge(best.score) +
+        '<span class="rank-main"><b>Kedvenc REpontod: ' + esc(bestP.name) + '</b>' +
+        '<small>' + esc(addrText(bestP)) + '</small></span>' +
+      '</div>');
+    }
+
+    var topTags = Object.keys(tags).sort(function (a, b) { return tags[b] - tags[a]; }).slice(0, 4);
+    if (topTags.length) {
+      out.push('<div class="fb-tags" style="margin-top:14px">' + topTags.map(function (t) {
+        return '<span class="fb-tag is-on">' + esc(tagLabel(t)) + ' ×' + tags[t] + '</span>';
+      }).join('') + '</div>');
+    }
+
+    // jelvények
+    out.push(profSection('Jelvények', badges.map(badgeHtml).join('')));
+
+    // látogatások
+    if (visits.length) {
+      out.push(profSection('Látogatások', visits.map(function (v) {
+        var p = state.byId.get(v.id);
+        if (!p) return '';
+        return '<div class="rank-row" data-id="' + p.id + '">' +
+          '<span class="p-ico" aria-hidden="true">📍</span>' +
+          '<span class="rank-main"><b>' + esc(p.name) + '</b>' +
+          '<small>' + fmtWhen(v.at) + (p.city ? ' · ' + esc(p.city) : '') + '</small></span>' +
+          '<span class="p-go" aria-hidden="true">›</span>' +
+        '</div>';
+      }).join(''), 'legutóbbi ' + visits.length));
+    }
+
+    // kedvencek
+    if (favIds.length) {
+      out.push(profSection('Kedvenceid', favIds.map(function (id) {
+        var p = state.byId.get(id);
+        return '<div class="rank-row" data-id="' + id + '">' +
+          '<span class="p-ico" aria-hidden="true">★</span>' +
+          '<span class="rank-main"><b>' + esc(p.name) + '</b>' +
+          '<small>' + esc(p.city || addrText(p)) + '</small></span>' +
+          '<button class="p-btn" type="button" data-route="' + id + '">Útvonal</button>' +
+        '</div>';
+      }).join(''), favIds.length + ' db'));
+    }
+
+    // értékelések
+    if (ids.length) {
+      var rows = ids.map(function (id) { return { id: id, d: store[id] || {} }; })
+        .sort(function (a, b) { return (b.d.at || 0) - (a.d.at || 0); });
+      out.push(profSection('Értékeléseid', rows.map(function (r) {
+        return rateRowHtml(r.id, r.d);
+      }).join(''), rows.length + ' db'));
+    }
+
+    return out.join('');
+  }
+
+  // a megye-tábla és a fiók teljes látogatáslistája aszinkron töltődik;
+  // ha megérkezik, újrarajzoljuk a nyitott profilt (a jelzőszám eltéréséből)
+  var profSig = null;
+
+  function profileSig() {
+    return (ZIP_COUNTY ? 'z' : '-') + '|' +
+      (profExtra.visits ? profExtra.visits.length : '-') + '|' +
+      Object.keys(loadFbStore()).length + '|' + Object.keys(social.favs).length;
+  }
+
+  function profileRefresh() {
+    profSig = profileSig();
+    var jobs = [];
+    if (!ZIP_COUNTY && !zipTried) jobs.push(loadZipCounty());
+    if (sb && account.user && profExtra.forUser !== account.user.id) jobs.push(loadProfExtras());
+    if (!jobs.length) return;
+    Promise.all(jobs).then(function () {
+      if (overlayKind === 'profile' && profileSig() !== profSig) openOverlay('profile');
+    });
+  }
+
+  function loadProfExtras() {
+    if (!sb || !account.user) return Promise.resolve();
+    var uid = account.user.id;
+    profExtra.forUser = uid;
+    return sb.from('visits').select('point_id,visited_at')
+      .eq('user_id', uid)
+      .order('visited_at', { ascending: false })
+      .limit(1000)
+      .then(function (res) {
+        if (res.error || !res.data) return;
+        profExtra.visits = res.data.map(function (r) {
+          return { id: Number(r.point_id), at: Date.parse(r.visited_at) || 0 };
+        }).filter(function (v) { return v.id; });
+      })
+      .catch(function () { });
+  }
+
+  /* --- profil műveletek (sorok kezelése, név szerkesztése) --- */
+
+  function jumpTo(id) {
+    closeOverlay();
+    setDock('dockMap');
+    select(id, {});
+  }
+
+  function editRating(id) {
+    jumpTo(id);
+    // a visszajelző doboz a részletek között van, oda görgetünk
+    setTimeout(function () {
+      if (el.feedback) {
+        el.feedback.scrollIntoView({ behavior: REDUCED_MOTION ? 'auto' : 'smooth', block: 'start' });
+      }
+    }, 380);
+  }
+
+  function removeRating(id) {
+    fbRemove(id);
+    if (sb && account.user) {
+      sb.from('ratings').delete().eq('user_id', account.user.id).eq('point_id', id)
+        .then(function (r) { if (r.error) console.warn('[értékelés törlés]', r.error.message); });
+    }
+    applyFilters();
+    if (selectedId === id) { loadFbIntoUI(id); refreshSheetRate(); }
+    openOverlay('profile');
+    toast('Értékelés törölve');
+  }
+
+  function routeFromProfile(id) {
+    var p = state.byId.get(id);
+    if (!p) return;
+    closeOverlay();
+    setDock('dockMap');
+    startRoute(p, null);
+  }
+
+  function profileNameEdit() {
+    var head = el.overlayBody.querySelector('.account-head');
+    if (!head || !account.user) return;
+    var name = displayName();
+    head.innerHTML =
+      '<span class="account-avatar">' + esc(String(name).trim().charAt(0).toUpperCase() || '?') + '</span>' +
+      '<form class="p-name-form">' +
+        '<input class="p-name-input" type="text" maxlength="32" value="' + esc(name) + '"' +
+          ' aria-label="Megjelenített név" placeholder="Megjelenített név">' +
+        '<span class="p-name-btns">' +
+          '<button class="btn btn-primary p-btn" type="submit">Mentés</button>' +
+          '<button class="btn btn-ghost p-btn" type="button" data-name-cancel>Mégse</button>' +
+        '</span>' +
+      '</form>';
+    var input = head.querySelector('.p-name-input');
+    head.querySelector('.p-name-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      saveDisplayName(input.value);
+    });
+    head.querySelector('[data-name-cancel]').addEventListener('click', function () { openOverlay('profile'); });
+    input.focus();
+    input.select();
+  }
+
+  function saveDisplayName(raw) {
+    if (!sb || !account.user) return;
+    var name = String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 32);
+    if (!name) { toast('Adj meg egy nevet (1–32 karakter)'); return; }
+    var apply = function () {
+      if (!account.profile) account.profile = {};
+      account.profile.display_name = name;
+      openOverlay('profile');
+      toast('Név elmentve ✓');
+    };
+    sb.from('profiles').update({ display_name: name }).eq('id', account.user.id).select('id')
+      .then(function (res) {
+        if (res.error) throw res.error;
+        if (res.data && res.data.length) return null;
+        // még nincs profilsor (pl. régi fiók) → létrehozzuk
+        return sb.from('profiles').insert({ id: account.user.id, display_name: name }).select('id')
+          .then(function (r2) { if (r2.error) throw r2.error; });
+      })
+      .then(apply)
+      .catch(function (e) { toast('Nem sikerült menteni: ' + authErr(e)); });
+  }
+
+  // avatar választó: emoji rács + szín, elöl élő előnézettel
+  function profileAvatarEdit() {
+    var head = el.overlayBody.querySelector('.account-head');
+    if (!head) return;
+    var cur = avatarOf() || { e: '', c: 0 };
+    var sel = { e: cur.e || '', c: cur.c || 0 };
+
+    var panel = document.createElement('div');
+    panel.className = 'p-avedit';
+    panel.innerHTML =
+      '<div class="p-av-head">' +
+        '<span class="p-av-prev">' + avatarSpan(sel) + '</span>' +
+        '<span class="p-av-head-txt"><b>Avatar választása</b>' +
+        '<small>Emojit és színt is adhatsz hozzá</small></span>' +
+      '</div>' +
+      '<div class="p-av-grid" role="group" aria-label="Emoji">' +
+        AV_EMOJI.map(function (e) {
+          return '<button type="button" class="p-av-emo' + (e === sel.e ? ' is-on' : '') + '"' +
+            ' data-e="' + e + '" aria-label="' + e + '">' + e + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="p-av-colors" role="group" aria-label="Szín">' +
+        AV_COLORS.map(function (c, i) {
+          return '<button type="button" class="p-av-col' + (i === sel.c ? ' is-on' : '') + '"' +
+            ' data-c="' + i + '" title="' + c.name + '" aria-label="' + c.name + ' szín">' +
+            '<i style="background:' + c.bg + '"></i></button>';
+        }).join('') +
+      '</div>' +
+      '<div class="p-av-btns">' +
+        '<button class="btn btn-primary p-btn" type="button" data-av-save>Mentés</button>' +
+        '<button class="btn btn-ghost p-btn" type="button" data-av-clear>Alapértelmezett</button>' +
+        '<button class="btn btn-ghost p-btn" type="button" data-av-cancel>Mégse</button>' +
+      '</div>';
+
+    head.hidden = true;
+    head.parentNode.insertBefore(panel, head);
+
+    var prev = panel.querySelector('.p-av-prev');
+    var repaint = function () {
+      prev.innerHTML = avatarSpan(sel);
+      Array.prototype.forEach.call(panel.querySelectorAll('.p-av-emo'), function (b) {
+        b.classList.toggle('is-on', b.dataset.e === sel.e);
+      });
+      Array.prototype.forEach.call(panel.querySelectorAll('.p-av-col'), function (b) {
+        b.classList.toggle('is-on', +b.dataset.c === sel.c);
+      });
+    };
+
+    panel.addEventListener('click', function (e) {
+      var emo = e.target.closest('.p-av-emo');
+      if (emo) { sel.e = emo.dataset.e === sel.e ? '' : emo.dataset.e; repaint(); return; }
+      var col = e.target.closest('.p-av-col');
+      if (col) { sel.c = +col.dataset.c; repaint(); return; }
+      if (e.target.closest('[data-av-save]')) {
+        setAvatar(sel).then(function () {
+          openOverlay('profile');
+          toast(sel.e ? 'Avatar elmentve ✓' : 'Alapértelmezett avatar');
+        });
+        return;
+      }
+      if (e.target.closest('[data-av-clear]')) {
+        setAvatar({ e: '', c: 0 }).then(function () {
+          openOverlay('profile');
+          toast('Vissza az alapértelmezettre');
+        });
+        return;
+      }
+      if (e.target.closest('[data-av-cancel]')) openOverlay('profile');
+    });
   }
 
   function initMap() {
@@ -2601,42 +3134,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       }
     } else {
       el.overlayEyebrow.textContent = 'Profil';
-      el.overlayTitle.textContent = 'Az értékeléseid';
-      if (!ids.length) {
-        el.overlayBody.innerHTML = '<div class="overlay-empty">Még nincs egy értékelésed sem.<br>' +
-          'Váltass vissza egy automatánál, és értékeld 1–10-ig — a többieknek is segítesz.</div>';
-      } else {
-        var sum = 0, best = null, tags = {};
-        ids.forEach(function (id) {
-          var d = store[id];
-          sum += d.score || 0;
-          if (!best || (d.score || 0) > best.score) best = { id: id, score: d.score };
-          (d.tags || []).forEach(function (t) { tags[t] = (tags[t] || 0) + 1; });
-        });
-        var avg = (sum / ids.length).toFixed(1).replace('.', ',');
-        var bestP = best ? state.byId.get(+best.id) : null;
-        var topTags = Object.keys(tags).sort(function (a, b) { return tags[b] - tags[a]; }).slice(0, 4);
-
-        el.overlayBody.innerHTML =
-          '<div class="profile-stats">' +
-            '<div class="profile-stat"><b>' + ids.length + '</b><span>értékelt pont</span></div>' +
-            '<div class="profile-stat"><b>' + avg + '</b><span>átlag / 10</span></div>' +
-            '<div class="profile-stat"><b>' + best.score + '</b><span>legjobb</span></div>' +
-          '</div>' +
-          (bestP
-            ? '<div class="rank-row" data-id="' + bestP.id + '">' +
-                scoreBadge(best.score) +
-                '<span class="rank-main"><b>Kedvenc REpontod: ' + esc(bestP.name) + '</b>' +
-                '<small>' + esc(addrText(bestP)) + '</small></span>' +
-              '</div>'
-            : '') +
-          (topTags.length
-            ? '<div class="fb-tags" style="margin-top:14px">' + topTags.map(function (t) {
-                var label = (FB_TAGS.filter(function (x) { return x.id === t; })[0] || {}).label || t;
-                return '<span class="fb-tag is-on">' + esc(label) + ' ×' + tags[t] + '</span>';
-              }).join('') + '</div>'
-            : '');
-      }
+      el.overlayTitle.textContent = 'Profilom';
+      el.overlayBody.innerHTML = profileHtml();
+      profileRefresh();   // megye-tábla / fióklátogatások betöltése után újrarajzolás
     }
 
     if (kind === 'profile') {
@@ -2862,6 +3362,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       maybeHideLoader();
       applyFilters();
       loadMeta();
+      // a profil látogatás/kedvenc/sorozat szekciói pontok nélkül üresek maradnának
+      if (overlayKind === 'profile') openOverlay('profile');
       var pos = positionFromHash();
       if (pos) setMe(pos.lat, pos.lng, null);
       setTimeout(maybeIntro, 700);
@@ -3175,7 +3677,16 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         if (act === 'intro') { closeOverlay(); setDock('dockMap'); setTimeout(introShow, 160); return; }
         if (act === 'logout') { authSignOut(); return; }
         if (act === 'delete') { authDeleteAccount(); return; }
+        if (act === 'name') { profileNameEdit(); return; }
+        if (act === 'avatar') { profileAvatarEdit(); return; }
       }
+      // profil sorok: értékelés törlés / szerkesztés, kedvenc útvonal
+      var delBtn = e.target.closest('[data-fbdel]');
+      if (delBtn) { removeRating(+delBtn.dataset.fbdel); return; }
+      var editBtn = e.target.closest('[data-fbedit]');
+      if (editBtn) { editRating(+editBtn.dataset.fbedit); return; }
+      var routeBtn = e.target.closest('[data-route]');
+      if (routeBtn) { routeFromProfile(+routeBtn.dataset.route); return; }
       if (e.target === el.overlay) { closeOverlay(); setDock('dockMap'); return; }
       var row = e.target.closest('.rank-row');
       if (row) {

@@ -1417,6 +1417,242 @@ body.is-nav .stage > .dock { display: none; }
   line-height: 1.7;
 }
 
+/* ===================== Profil: szekciók, jelvények ===================== */
+
+.p-sec { margin-top: 20px; }
+.p-sec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 8px 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.p-sec-head h3 {
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -.2px;
+  margin: 0;
+}
+.p-sec-head span {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* motivációs sáv a következő jelvényig */
+.p-prog {
+  padding: 13px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .045);
+  border: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+.p-prog-txt b {
+  display: block;
+  font-family: var(--display);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.p-prog-txt span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.p-prog-bar {
+  margin-top: 10px;
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, .08);
+  overflow: hidden;
+}
+.p-prog-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #F0F66B, var(--lime));
+  transition: width .45s ease;
+}
+.p-prog.is-done .p-prog-txt b { color: var(--lime); }
+.p-prog.is-done .p-prog-bar i { background: var(--lime); }
+
+/* jelvények */
+.p-badge {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 12px;
+  opacity: .55;
+  filter: grayscale(.85);
+  transition: opacity .2s ease, filter .2s ease;
+}
+.p-badge:last-child { border-bottom: 0; }
+.p-badge.is-got { opacity: 1; filter: none; }
+.p-badge-ico { flex: none; width: 28px; text-align: center; font-size: 19px; }
+.p-badge-main { flex: 1; min-width: 0; }
+.p-badge-main b {
+  display: block;
+  font-family: var(--display);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.p-badge-main small { display: block; font-size: 11.5px; color: var(--ink-3); margin-top: 1px; }
+.p-badge.is-got .p-badge-main small { color: var(--lime); }
+
+/* sorozat a statisztikákban */
+.profile-stat.is-streak b { color: var(--orange); }
+
+/* soron belüli apró elemek */
+.p-ico { flex: none; width: 26px; text-align: center; font-size: 15px; color: var(--lime); }
+.p-go { flex: none; color: var(--ink-3); font-size: 15px; }
+.p-btn {
+  flex: none;
+  padding: 6px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: rgba(255, 255, 255, .06);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.p-btn:hover { background: rgba(240, 246, 107, .14); border-color: var(--lime); }
+.p-btn.btn-primary { border-color: transparent; }
+
+/* értékelés-sorok */
+.rate-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.rate-row:last-child { border-bottom: 0; }
+.rate-row:hover { background: rgba(255, 255, 255, .07); }
+.p-row-acts { flex: none; display: flex; gap: 2px; }
+.p-ico-btn {
+  width: 30px; height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.p-ico-btn:hover { background: rgba(255, 255, 255, .09); color: var(--ink); }
+
+/* fejléc gombok + avatar választó */
+.p-head-acts { flex: none; display: flex; gap: 6px; margin-left: auto; }
+.p-edit {
+  flex: none;
+  width: 30px; height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.p-edit:hover { background: rgba(255, 255, 255, .09); color: var(--lime); border-color: var(--lime); }
+.av-emoji { font-size: 22px; line-height: 1; font-family: initial; }
+
+.p-avedit {
+  padding: 13px;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid var(--line);
+}
+.p-av-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.p-av-prev { flex: none; }
+.p-av-head-txt b {
+  display: block;
+  font-family: var(--display);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.p-av-head-txt small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--ink-3); }
+.p-av-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+}
+.p-av-emo {
+  aspect-ratio: 1;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .04);
+  font-family: initial;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.p-av-emo:hover { background: rgba(255, 255, 255, .1); }
+.p-av-emo.is-on { border-color: var(--lime); background: rgba(240, 246, 107, .14); }
+.p-av-colors { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.p-av-col {
+  width: 30px; height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color .15s ease;
+}
+.p-av-col i { width: 20px; height: 20px; border-radius: 50%; display: block; }
+.p-av-col.is-on { border-color: var(--ink); }
+.p-av-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.p-name-form { flex: 1; min-width: 0; display: flex; gap: 8px; align-items: center; }
+.p-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 11px;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, .32);
+  color: var(--ink);
+  font-size: 14px;
+  outline: none;
+  transition: border-color .15s ease;
+}
+.p-name-input:focus { border-color: var(--lime); }
+.p-name-btns { flex: none; display: flex; gap: 6px; }
+
+/* szűk kijelzőn a 4 statisztika két sorba fordul */
+@media (max-width: 560px) {
+  .profile-stats { flex-wrap: wrap; }
+  .profile-stat { flex: 1 1 40%; }
+  .p-name-form { flex-wrap: wrap; }
+  .p-name-input { flex: 1 1 100%; }
+  .p-av-grid { grid-template-columns: repeat(6, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .p-prog-bar i, .p-badge { transition: none; }
+}
+
 /* ===================== Részletek (sheet) ===================== */
 
 .sheet-scrim {

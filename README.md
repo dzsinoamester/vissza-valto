@@ -37,12 +37,17 @@ Az adat a MOHU nyilvános térképes API-járól származik (`https://map.mohu.h
 
 ```bash
 node tools/fetch-data.mjs      # lekéri az összes pontot + a nyitvatartásukat
+node tools/gen-megye.mjs       # irányítószám -> megye tábla (a profil jelvényeihez)
 ```
 
 A szkript ~4800 kérést párhuzamosan (24 szálon) futtat, 2–3 perc. Eredmény:
 
 * `data/repontok.json` – `[{id, type, lat, lng, name, address, city, zip, hours:{h,s,v}}, …]`
 * `data/repontok-meta.json` – összesítés + `updatedAt`
+
+A `gen-megye.mjs` a `counties.geojson` (geoHungary, NUTS3) alapján kiszámolja minden pont
+irányítószámának megyéjét, és `data/zip-megye.json` fájlt ír (~43 KB). `fetch-data.mjs`
+futtatása után érdemes újrafuttatni, ha új irányítószámok jelentek meg.
 
 Az oldal induláskor és félóránként automatikusan betölti ezeket (a böngésző gyorsítótára nélkül).
 
@@ -77,6 +82,26 @@ térkép belépés nélkül is használható.
   lépkednek a kártyák között.
 - Bármikor újranyitható: **Profil → Bemutató**.
 
+## Profil
+
+A **Profil** fül nem csak a számokat mutatja:
+
+* **Haladási sáv** a tetején: melyik jelvény van a legközelebb (pl. „Következő jelvény: 7/10 értékelt pont").
+* **Statisztika + sorozat** – értékelt pontok, átlag, legjobb és a napos sorozat (hány napja van
+  folyamatosan látogatásod vagy értékelésed).
+* **Jelvények** – „Első visszaváltás", „10 értékelt pont", „5 megye" (irányítószámból számolva),
+  „Éjszakai bagoly" (éjfél után mentett értékelés) és „Segítő" (5 üzemállapot-jelzés).
+* **Látogatások** – a legutóbbi 8 látogatás dátummal; koppintásra a térképen nyílik meg a pont.
+* **Kedvenceid** – „Útvonal" gombbal egyből indul az útvonaltervezés.
+* **Értékeléseid** – pontszám, címkék, dátum, és szerkesztés (✎) / törlés (🗑) innen is.
+* **Megjelenített név** – a fejléc ceruzájával szerkeszthető (a `profiles.display_name` tárolja).
+* **Avatar** – a fejléc 😊 gombjával emoji + szín választható (30 emoji, 8 szín). Vendégként
+  az eszközön, bejelentkezve a fiók `user_metadata`-jában tárolódik, így minden eszközödön
+  ugyanaz jelenik meg. Az „Alapértelmezett” visszaállítja a névbetűt.
+
+A megye-jelvényhez szükséges `data/zip-megye.json` hiányzik vagy frissíteni kell:
+`node tools/gen-megye.mjs`.
+
 ## Közösségi funkciók
 
 A `data/supabase-social.sql` futtatása után (a schema + extra után) működnek:
@@ -95,10 +120,12 @@ index.html            a felület váza
 css/styles.css        MOHU arculat (mohu.hu hivatalos CSS-ből kinyert színekkel)
 js/app.js             minden viselkedés: térkép, keresés, szűrők, SOS, részletek
 data/repontok.json    a letöltött pontok
+data/zip-megye.json   irányítószám -> megye (a profil megye-jelvényéhez)
 data/supabase-schema.sql  profiles + ratings tábla, RLS
 data/supabase-extra.sql   profil RLS, regisztrációs trigger, fióktörlés
 data/supabase-social.sql  jelentések, kedvencek, látogatások, értékelés-összesítő
 tools/fetch-data.mjs  adatfrissítés
+tools/gen-megye.mjs   irányítószám -> megye tábla generálása
 tools/serve.mjs       helyi kiszolgáló fejlesztéshez
 ```
 
