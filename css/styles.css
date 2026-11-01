@@ -2066,7 +2066,7 @@ body.is-nav .stage > .dock { display: none; }
 }
 
 @media (max-width: 900px) {
-  .stage { inset: 6px; border-radius: 20px; }
+  .stage { inset: 0px; border-radius: 0px; }
 
   /* mobil/tablet: nincs felső fejléc, az SOS az alsó menüsávban van */
   .topbar { display: none; }
