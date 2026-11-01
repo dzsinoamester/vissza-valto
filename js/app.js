@@ -29,6 +29,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   var ready = { data: false, style: false };
   var pendingPlace = null;   // a stílus betöltéséig függőben lévő „tegyük le a jelölőt" lépés
   var nav = null;            // aktív turn-by-turn navigáció állapota
+  var is3D = false;          // döntött (billentett) 3D nézet aktív-e
+  var animRaf = 0, animLast = 0, animT0 = 0;
+  var REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   var state = {
     points: [],
@@ -1190,9 +1193,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       zoom: 6.9,
       minZoom: 6,
       maxZoom: 18,
+      maxPitch: 60,
       attributionControl: false,
-      dragRotate: false,
-      pitchWithRotate: false,
+      // döntés + forgatás PC-n (3D nézet), telefonon az ujj ne billentse le véletlenül
+      dragRotate: !isMobile(),
+      pitchWithRotate: !isMobile(),
+      touchPitch: false,
       touchZoomRotate: true
     });
 
@@ -1206,8 +1212,15 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         });
       } catch (e) { }
     }
-    map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: false }), 'bottom-right');
+    map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right');
+    addTiltControl();
+
+    // ha a felhasználó kézzel dönti meg a térképet, a 3D gomb állapota kövesse
+    map.on('pitchend', function () {
+      var on = map.getPitch() > 20;
+      if (on !== is3D) set3D(on, { silent: true });
+    });
     // az attribúció csak egy kis „i” gomb, alapból becsukva
     function collapseAttrib() {
       var at = document.querySelector('.maplibregl-ctrl-attrib');
@@ -1230,11 +1243,14 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   function onStyleLoad() {
     applyTheme();
+    applySky();
+    addBuildings3D();
     addDataLayers();
     if (selectedId != null) setSelected(selectedId);
     if (state.route) drawRouteLayer(state.route.geojson);
     bindLayerHandlers();
     ready.style = true;
+    startAnimations();
     if (pendingPlace) { var fn = pendingPlace; pendingPlace = null; fn(); }
     maybeHideLoader();
   }
@@ -1283,7 +1299,145 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     });
   }
 
+  /* --- égbolt + fényezés: mély, éjszakai térhatás döntéskor --- */
+  function applySky() {
+    if (typeof map.setSky === 'function') {
+      try {
+        map.setSky({
+          'sky-color': '#040507',
+          'horizon-color': '#0B1016',
+          'sky-horizon-blend': .6,
+          'fog-color': '#0A0D12',
+          'horizon-fog-blend': .65,
+          'fog-ground-blend': .85,
+          // távolról enyhe atmoszféra-réteg, közelről tiszta fekete ég
+          'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, .5, 7, 0]
+        });
+      } catch (e) { }
+    }
+    // hideítt fény az épületek oldalának (hűvös, holdfény-szerű)
+    if (typeof map.setLight === 'function') {
+      try { map.setLight({ anchor: 'viewport', color: '#C8D4FF', intensity: .45 }); } catch (e) { }
+    }
+  }
+
+  /* --- 3D épületek: z13,5 fölött, a címkék alá fűzve, hogy azok olvashatók maradjanak --- */
+  function addBuildings3D() {
+    if (map.getLayer('building-3d')) return;
+    var layers = [];
+    try { layers = map.getStyle().layers || []; } catch (e) { return; }
+    var before = null;
+    for (var i = 0; i < layers.length; i++) {
+      if (layers[i].type === 'symbol') { before = layers[i].id; break; }
+    }
+    try {
+      map.addLayer({
+        id: 'building-3d',
+        type: 'fill-extrusion',
+        source: 'openmaptiles',
+        'source-layer': 'building',
+        minzoom: 13.5,
+        paint: {
+          'fill-extrusion-color': ['interpolate', ['linear'], ['zoom'], 13.5, '#101318', 16, '#191D24'],
+          'fill-extrusion-height': ['coalesce', ['get', 'render_height'], ['get', 'height'], 8],
+          'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0],
+          'fill-extrusion-opacity': .93
+        }
+      }, before);
+    } catch (e) { }
+  }
+
+  /* --- 3D nézet ki-/bekapcsoló (a térkép sarkában és mobilon a kapszulában) --- */
+
+  function addTiltControl() {
+    var wrap = document.createElement('div');
+    wrap.className = 'maplibregl-ctrl-group map-3d-ctrl';
+    var btn = document.createElement('button');
+    btn.className = 'map-3d-btn';
+    btn.type = 'button';
+    btn.title = '3D nézet';
+    btn.setAttribute('aria-label', '3D nézet');
+    btn.setAttribute('aria-pressed', 'false');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5l9 4.5 9-4.5L12 3z"/><path d="m3 12.5 9 4.5 9-4.5"/><path d="m3 17 9 4.5L21 17"/></svg>';
+    btn.addEventListener('click', toggle3D);
+    wrap.appendChild(btn);
+    map.addControl({
+      onAdd: function () { return wrap; },
+      onRemove: function () { wrap.remove(); }
+    }, 'bottom-right');
+  }
+
+  function toggle3D() { set3D(!is3D); }
+
+  function set3D(on, opts) {
+    is3D = !!on;
+    document.body.classList.toggle('is-3d', is3D);
+    if (el.tool3D) {
+      el.tool3D.classList.toggle('is-on', is3D);
+      el.tool3D.setAttribute('aria-pressed', is3D ? 'true' : 'false');
+    }
+    var b = document.querySelector('.map-3d-btn');
+    if (b) {
+      b.classList.toggle('is-on', is3D);
+      b.setAttribute('aria-pressed', is3D ? 'true' : 'false');
+    }
+    if (opts && opts.silent) return;   // a felhasználó maga döntötte meg, nem mozgatjuk újra
+    try {
+      map.easeTo({ pitch: is3D ? 55 : 0, duration: 900, essential: true });
+    } catch (e) { }
+  }
+
+  /* --- lassú animációk: klaszter-lüktetés + útvonal-fény (egy közös rAF) --- */
+
+  function startAnimations() {
+    if (REDUCED_MOTION || animRaf) return;
+    animRaf = window.requestAnimationFrame(animLoop);
+  }
+
+  function animLoop(ts) {
+    animRaf = window.requestAnimationFrame(animLoop);
+    if (!map || document.hidden || !ready.style) return;
+    if (ts - animLast < 42) return;              // ~24 fps elég egy lassú lüktetéshez
+    animLast = ts;
+    if (!animT0) animT0 = ts;
+    if (map.isMoving()) return;                  // mozgás közben ne terheljük a stílust
+
+    if (map.getZoom() < 13.4 && map.getLayer('repont-cluster-glow')) {
+      var k = 0.5 - 0.5 * Math.cos(((ts - animT0) / 1700) * Math.PI * 2);
+      setP('repont-cluster-glow', 'circle-radius', clusterGlowRadius(k * 7));
+      setP('repont-cluster-glow', 'circle-opacity', .16 + k * .12);
+    }
+    if (state.route && state.route.geojson && map.getLayer('route-flow')) {
+      setP('route-flow', 'line-gradient', flowGradient(((ts - animT0) / 2600) % 1));
+    }
+  }
+
+  /* --- útvonal: futó fény (line-gradient + lineMetrics forrás) --- */
+
+  // a `o` a fény fejének pozíciója az útvonalon (0..1); a fej fehér, mögötte lime utófény
+  function flowGradient(o) {
+    var N = 40, stops = ['interpolate', ['linear'], ['line-progress']];
+    for (var i = 0; i <= N; i++) {
+      var t = i / N;
+      var d = ((t - o) % 1 + 1) % 1;   // 0 = a fény feje
+      var r, g, b, a;
+      if (d < 0.025) { r = 255; g = 255; b = 255; a = 1; }
+      else if (d < 0.11) {
+        var k = (d - 0.025) / 0.085;
+        r = 255 - 39 * k; g = 255 - 31 * k; b = 255 - 208 * k; a = 1;
+      } else if (d < 0.3) { r = 216; g = 224; b = 47; a = 1 - (d - 0.11) / 0.19; }
+      else { r = 216; g = 224; b = 47; a = 0; }
+      stops.push(t, 'rgba(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ',' + a.toFixed(3) + ')');
+    }
+    return stops;
+  }
+
   /* --- pontok + klűszerek + útvonal --- */
+
+  // a klaszter alatti lime ragyogás sugara; a `pulse` (0..7) adja a lüktetést
+  function clusterGlowRadius(pulse) {
+    return ['step', ['get', 'point_count'], 26 + pulse, 10, 33 + pulse, 50, 41 + pulse, 200, 49 + pulse];
+  }
 
   function addDataLayers() {
     if (!map.getSource('repont')) {
@@ -1371,14 +1525,36 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         paint: { 'text-color': '#D8E02F', 'text-halo-color': '#050607', 'text-halo-width': 2 }
       });
 
+      // modern klaszter: lime ragyogás a korong alatt, belső fénymag, sötét számláló
+      map.addLayer({
+        id: 'repont-cluster-glow', type: 'circle', source: 'repont',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-radius': clusterGlowRadius(0),
+          'circle-color': '#D8E02F',
+          'circle-opacity': .2,
+          'circle-blur': 1
+        }
+      });
+
       map.addLayer({
         id: 'repont-clusters', type: 'circle', source: 'repont',
         filter: ['has', 'point_count'],
         paint: {
           'circle-radius': ['step', ['get', 'point_count'], 16, 10, 20, 50, 25, 200, 31],
-          'circle-color': 'rgba(4,5,6,.9)',
+          'circle-color': 'rgba(7,8,10,.94)',
           'circle-stroke-color': '#D8E02F',
           'circle-stroke-width': 2
+        }
+      });
+
+      map.addLayer({
+        id: 'repont-cluster-core', type: 'circle', source: 'repont',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-radius': ['step', ['get', 'point_count'], 9, 10, 12, 50, 15, 200, 18],
+          'circle-color': 'rgba(216,224,47,.14)',
+          'circle-blur': .55
         }
       });
 
@@ -1390,7 +1566,19 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           'text-font': ['Noto Sans Regular'],
           'text-size': ['step', ['get', 'point_count'], 13, 10, 14, 50, 15]
         },
-        paint: { 'text-color': '#D8E02F' }
+        paint: { 'text-color': '#D8E02F', 'text-halo-color': 'rgba(3,4,5,.9)', 'text-halo-width': 2 }
+      });
+
+      // hover: lime keret a pont alatt (az egér fölé érésre)
+      map.addLayer({
+        id: 'repont-hover', type: 'circle', source: 'repont',
+        filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'id'], -1]],
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 9, 11, 13, 16, 16.5],
+          'circle-color': 'rgba(216,224,47,.08)',
+          'circle-stroke-color': '#D8E02F',
+          'circle-stroke-width': 1.8
+        }
       });
 
       map.addLayer({
@@ -1406,7 +1594,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     }
 
     if (!map.getSource('route')) {
-      map.addSource('route', { type: 'geojson', data: EMPTY_FC });
+      // lineMetrics: kell a line-gradient-hez (futó fény az útvonalon)
+      map.addSource('route', { type: 'geojson', data: EMPTY_FC, lineMetrics: true });
       map.addLayer({
         id: 'route-case', type: 'line', source: 'route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -1418,19 +1607,17 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         paint: {
           'line-color': '#D8E02F',
           'line-width': ['interpolate', ['linear'], ['zoom'], 8, 3.5, 15, 6],
-          'line-opacity': .95,
-          'line-dasharray': [1.2, 1.4]
+          'line-opacity': .95
         }
       });
-      // az útvonal mentén futó „csillogás"
+      // az útvonalon végigfutó „energia-fény": fej + lime utófény (animálva)
       map.addLayer({
         id: 'route-flow', type: 'line', source: 'route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
-          'line-color': '#FFFFFF',
-          'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 15, 2.6],
-          'line-opacity': .55,
-          'line-dasharray': [0.2, 2.6]
+          'line-width': ['interpolate', ['linear'], ['zoom'], 8, 6, 15, 9],
+          'line-opacity': 1,
+          'line-gradient': flowGradient(.15)
         }
       });
     }
@@ -1484,6 +1671,99 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       map.on('mouseenter', lid, function () { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', lid, function () { map.getCanvas().style.cursor = ''; });
     });
+
+    // --- hover: lime keret + lebegő előnézet (csak egérrel, asztali gépen) ---
+    if (HOVER_CAPABLE) {
+      map.on('mousemove', onHoverMove);
+      map.on('dragstart', function () { hoverDrag = true; clearHover(); });
+      map.on('dragend', function () { hoverDrag = false; });
+      map.on('movestart', clearHover);
+      map.on('click', clearHover);
+    }
+  }
+
+  /* ==================== hover + lebegő előnézet ==================== */
+
+  var HOVER_CAPABLE = !!(window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches);
+  var hoverId = null, hoverLast = 0, hoverDrag = false;
+
+  function setHoverRing(id) {
+    if (!map || !map.getLayer('repont-hover')) return;
+    try {
+      map.setFilter('repont-hover', ['all', ['!', ['has', 'point_count']], ['==', ['get', 'id'], id == null ? -1 : id]]);
+    } catch (e) { }
+  }
+
+  function moveTip(pt) {
+    var t = el.mapTip;
+    if (!t || t.hidden) return;
+    var pad = 12, w = t.offsetWidth, h = t.offsetHeight;
+    var container = map.getContainer();
+    var x = pt.x + 14, y = pt.y - h - 14;          // a kurzor fölé
+    if (x + w > container.clientWidth - pad) x = pt.x - 14 - w;   // jobb szél → balra
+    if (y < pad) y = pt.y + 22;                                  // nincs hely fent → lent
+    t.style.transform = 'translate(' + Math.round(Math.max(pad, x)) + 'px,' + Math.round(y) + 'px)';
+  }
+
+  function showTip(html, pt) {
+    var t = el.mapTip;
+    if (!t) return;
+    if (t.innerHTML !== html) t.innerHTML = html;
+    if (t.hidden) { t.hidden = false; t.classList.add('is-on'); }
+    moveTip(pt);
+  }
+
+  function hideTip() {
+    var t = el.mapTip;
+    if (!t || t.hidden) return;
+    t.classList.remove('is-on');
+    t.hidden = true;
+  }
+
+  function tipHtmlFor(f) {
+    var pr = f.properties || {};
+    if (pr.point_count != null) {
+      return '<b>' + esc(String(pr.point_count_abbreviated || pr.point_count)) + ' pont</b>' +
+        '<span class="tip-sub">Kattints a nagyításhoz</span>';
+    }
+    var p = state.byId.get(pr.id);
+    if (!p) return null;
+    var st = statusOf(p, new Date());
+    return '<b>' + esc(p.name) + '</b>' +
+      '<span class="tip-row">' +
+        '<span class="tag ' + p.type + '">' + (p.type === 'automata' ? 'Automata' : 'Kézi') + '</span>' +
+        '<span class="tip-st ' + st + '">' + OPEN_LABEL[st] + '</span>' +
+        (p._d != null ? '<span class="tip-d">' + fmtDist(p._d) + '</span>' : '') +
+      '</span>';
+  }
+
+  function clearHover() {
+    hoverId = null;
+    setHoverRing(null);
+    hideTip();
+  }
+
+  function onHoverMove(e) {
+    if (hoverDrag || map.isMoving()) return;
+    var now = Date.now();
+    if (now - hoverLast < 55) return;     // ne kérdezgessünk minden képkockán
+    hoverLast = now;
+
+    var layers = ['repont-dot', 'repont-score', 'repont-clusters'].filter(function (l) { return map.getLayer(l); });
+    if (!layers.length) return;
+    var f = map.queryRenderedFeatures(e.point, { layers: layers })[0];
+    if (!f) { if (hoverId != null) clearHover(); return; }
+
+    var html = tipHtmlFor(f);
+    if (!html) { clearHover(); return; }
+
+    var pr = f.properties || {};
+    var id = pr.point_count != null ? 'c' + pr.cluster_id : pr.id;
+    if (id !== hoverId) {
+      hoverId = id;
+      setHoverRing(pr.point_count != null ? null : pr.id);
+    }
+    showTip(html, e.point);
   }
 
   function popupHtml(p, now) {
@@ -2820,6 +3100,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     // Lebegő eszközök (telefon/tablet)
     el.toolLocate.addEventListener('click', function () { askLocation('locate'); });
+    el.tool3D.addEventListener('click', toggle3D);
     el.toolFilter.addEventListener('click', function () {
       closeOverlay();
       setDock('dockSearch');
@@ -3004,7 +3285,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'sheetStatusBox', 'sheetStatusText', 'sheetStatusSub', 'sheetStatusBar',
      'hoursBlock', 'hoursToggle',
      'sheetClose', 'sheetRoute', 'navGoogle', 'navWaze', 'navApple', 'copyAddr',
-     'toast', 'loader', 'statAll', 'statAuto', 'statKezi', 'toolFilter', 'toolLocate',
+     'toast', 'loader', 'statAll', 'statAuto', 'statKezi', 'toolFilter', 'toolLocate', 'tool3D', 'mapTip',
      'routeCard', 'routeClose', 'routeModes', 'routeDist', 'routeTime', 'routeName',
      'routeAddr', 'routeSteps', 'routeStepsToggle', 'routeStart', 'routeGo', 'routeDetail',
      'feedback', 'fbScores', 'fbTags', 'fbNote', 'fbSend', 'fbDelete', 'fbDone'

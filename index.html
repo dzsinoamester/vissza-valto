@@ -18,6 +18,7 @@
 <div class="stage">
   <div id="map" aria-label="REpontok térképe"></div>
   <div class="map-scrim" aria-hidden="true"></div>
+  <div class="map-tip" id="mapTip" hidden aria-hidden="true"></div>
 
   <!-- ================= Fejléc ================= -->
   <header class="topbar">
@@ -35,8 +36,8 @@
         </svg>
       </span>
       <span class="brand-text">
-        <strong>Vissza<span class="accent">!</span></strong>
-        <small>palackvisszaváltó pontok</small>
+        <strong><span class="accent">Vissza!</span></strong>
+        <small>vigyél vissza!</small>
       </span>
     </div>
 
@@ -180,6 +181,9 @@
         </button>
         <button class="map-tool" id="toolLocate" type="button" title="Itt vagyok" aria-label="Itt vagyok">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="8.4"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg>
+        </button>
+        <button class="map-tool" id="tool3D" type="button" title="3D nézet" aria-label="3D nézet" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5l9 4.5 9-4.5L12 3z"/><path d="m3 12.5 9 4.5 9-4.5"/><path d="m3 17 9 4.5L21 17"/></svg>
         </button>
       </div>
     </div>
