@@ -29,6 +29,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   var ready = { data: false, style: false };
   var pendingPlace = null;   // a stílus betöltéséig függőben lévő „tegyük le a jelölőt" lépés
   var nav = null;            // aktív turn-by-turn navigáció állapota
+  var stepIdx = -1;          // kiválasztott útvonal-lépés előnézetben (-1 = nincs)
+  var stepMarker = null;     // a manőver helyén lévő lépés-jelölő
   var is3D = false;          // döntött (billentett) 3D nézet aktív-e
   var animRaf = 0, animLast = 0, animT0 = 0;
   var REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -2358,9 +2360,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   function routeStepsHtml(steps) {
     if (!steps || !steps.length) return '';
-    return steps.map(function (s) {
+    return steps.map(function (s, i) {
       var ico = stepIcon(s.maneuver);
-      return '<div class="rstep">' +
+      return '<div class="rstep" data-step="' + i + '" role="button" tabindex="0" title="Megnézem ezt a lépést">' +
         '<span class="rstep-ico">' + ico + '</span>' +
         '<span class="rstep-txt">' + esc(s.instruction || stepText(s)) +
           (s.name ? '<i>' + esc(s.name) + '</i>' : '') +
@@ -2567,6 +2569,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         el.routeSteps.innerHTML = routeStepsHtml(state.route.steps);
         el.routeStepsToggle.hidden = !(state.route.steps && state.route.steps.length > 3);
         el.routeSteps.hidden = true;
+        // lépésről lépésre léptető sáv (legalább 2 lépés kell)
+        clearStepPreview();
+        el.stepNav.hidden = !(state.route.steps && state.route.steps.length > 1);
 
         if (opts && opts.navigate) { startNavigation(); return; }
         fitRoute(rt.geometry.coordinates, p);
@@ -2586,6 +2591,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         el.routeTime.textContent = '–';
         el.routeSteps.innerHTML = '';
         el.routeStepsToggle.hidden = true;
+        el.stepNav.hidden = true;
         if (opts && opts.navigate) { startNavigation(); return; }
         fitRoute(line, p);
         toast('Az útvonalszolgáltató nem érhető el — egyenes vonalat rajzoltam');
@@ -2618,8 +2624,137 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     state.route = null;
     el.routeCard.hidden = true;
     el.routeSteps.hidden = true;
+    el.stepNav.hidden = true;
+    clearStepPreview();
     document.body.classList.remove('is-routing');
     drawRouteLayer(null);
+  }
+
+  /* ==================== lépésről lépésre kattintható előnézet ==================== */
+
+  // az adott lépésre ugrik a térképen, és odaállítja a lépés-jelölőt
+  function previewStep(i) {
+    var steps = (state.route && state.route.steps) || [];
+    if (!steps.length) return;
+    if (i < 0) i = 0;
+    if (i > steps.length - 1) i = steps.length - 1;
+    stepIdx = i;
+    var s = steps[i];
+    var loc = s.maneuver && s.maneuver.location;
+
+    // sor kiemelése + görgetés
+    Array.prototype.forEach.call(el.routeSteps.children, function (row) {
+      row.classList.toggle('is-active', Number(row.dataset.step) === i);
+    });
+    var act = el.routeSteps.querySelector('.rstep.is-active');
+    if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
+    if (el.routeSteps.hidden) {
+      el.routeSteps.hidden = false;
+      el.routeStepsToggle.textContent = 'Lépések elrejtése';
+    }
+
+    el.stepLabel.textContent = (i + 1) + ' / ' + steps.length;
+
+    if (!loc) return;
+    setStepMarker(loc, stepIcon(s.maneuver));
+    try {
+      map.easeTo({
+        center: loc,
+        zoom: Math.max(map.getZoom(), 16),
+        duration: REDUCED_MOTION ? 0 : 700
+      });
+    } catch (e) { }
+  }
+
+  // a lépés-jelölő lerakása / áthelyezése (kattintásra vissza az útvonalhoz)
+  function setStepMarker(loc, ico) {
+    if (!stepMarker) {
+      var d = document.createElement('div');
+      d.className = 'step-marker';
+      d.title = 'Vissza az útvonalhoz';
+      d.addEventListener('click', function () {
+        if (nav) navStepsClose();
+        else { clearStepPreview(); fitRouteTo(); }
+      });
+      stepMarker = new maplibregl.Marker({ element: d, anchor: 'center' });
+    }
+    stepMarker.setLngLat(loc).addTo(map);
+    stepMarker.getElement().textContent = ico;
+  }
+
+  // vissza a teljes útvonal nézetéhez
+  function fitRouteTo() {
+    if (!state.route || !state.route.geojson) return;
+    var f = state.route.geojson.features[0];
+    if (f && f.geometry) fitRoute(f.geometry.coordinates, state.route.point);
+  }
+
+  function clearStepPreview() {
+    stepIdx = -1;
+    if (stepMarker) { stepMarker.remove(); stepMarker = null; }
+    Array.prototype.forEach.call(el.routeSteps.children, function (row) {
+      row.classList.remove('is-active');
+    });
+    Array.prototype.forEach.call(el.navStepsList.children, function (row) {
+      row.classList.remove('is-active');
+    });
+    el.stepLabel.textContent = '– / –';
+  }
+
+  /* ==================== navigáció: kattintható lépéslista ==================== */
+
+  function navStepsHighlight(i) {
+    Array.prototype.forEach.call(el.navStepsList.children, function (row) {
+      row.classList.toggle('is-active', Number(row.dataset.step) === i);
+    });
+  }
+
+  // a lépéslista kinyitása navigáció közben
+  function openNavSteps() {
+    if (!nav || !state.route || !state.route.steps || !state.route.steps.length) {
+      toast('Nincsenek lépések ehhez az útvonalhoz');
+      return;
+    }
+    el.navStepsList.innerHTML = routeStepsHtml(state.route.steps);
+    el.navStepsPanel.hidden = false;
+    el.navStepsBtn.classList.add('is-active');
+    document.body.classList.add('is-navsteps');   // a HUD-kártyák a lista mellett maradjanak
+    navStepsHighlight(nav.stepIdx);
+    var act = el.navStepsList.querySelector('.rstep.is-active');
+    if (act && act.scrollIntoView) act.scrollIntoView({ block: 'center' });
+  }
+
+  // egy lépés előnézete navigáció közben (a GPS-et addig nem követi a kamera)
+  function navStepPreview(i) {
+    var steps = (state.route && state.route.steps) || [];
+    if (!steps.length) return;
+    if (i < 0) i = 0;
+    if (i > steps.length - 1) i = steps.length - 1;
+    stepIdx = i;
+    navStepsHighlight(i);
+    var row = el.navStepsList.querySelector('.rstep.is-active');
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+    var s = steps[i];
+    var loc = s.maneuver && s.maneuver.location;
+    if (!loc) return;
+    if (nav) nav.suppressFollow = true;   // ne rángassa vissza a GPS a nézetet
+    setStepMarker(loc, stepIcon(s.maneuver));
+    try {
+      map.easeTo({ center: loc, zoom: Math.max(map.getZoom(), 16), duration: REDUCED_MOTION ? 0 : 700 });
+    } catch (e) { }
+  }
+
+  // a lista bezárása → vissza a valós idejű követéshez
+  function navStepsClose() {
+    el.navStepsPanel.hidden = true;
+    el.navStepsBtn.classList.remove('is-active');
+    document.body.classList.remove('is-navsteps');
+    clearStepPreview();
+    if (nav) {
+      nav.suppressFollow = false;
+      nav.lastFollow = 0;             // azonnal ugorjon vissza a saját pozícióra
+      if (state.me) navUpdate(state.me);
+    }
   }
 
   /* ==================== appon belüli turn-by-turn navigáció ==================== */
@@ -2700,6 +2835,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.navNext.hidden = true;
     document.body.classList.add('is-nav');
     closePopup();   // a HUD ne takarjon alatta kibukkanó pontkártyát
+    clearStepPreview();  // lépés-előnézet jelölője ne maradjon a térképen
     recordVisit(state.route && state.route.point ? state.route.point.id : null);
     startWatch();
     if (state.me) navUpdate(state.me);
@@ -2711,6 +2847,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.navView.hidden = true;
     el.arrive.hidden = true;
     el.navNext.hidden = true;
+    el.navStepsPanel.hidden = true;
+    el.navStepsBtn.classList.remove('is-active');
+    document.body.classList.remove('is-navsteps');
+    clearStepPreview();
     document.body.classList.remove('is-nav');
     if (state.route && state.route.geojson && state.route.geojson.features.length) {
       fitRoute(state.route.geojson.features[0].geometry.coordinates, state.route.point);
@@ -2720,6 +2860,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   function navArrived() {
     if (!nav || nav.arrived) return;
     nav.arrived = true;
+    el.navStepsPanel.hidden = true;
+    el.navStepsBtn.classList.remove('is-active');
+    document.body.classList.remove('is-navsteps');
+    clearStepPreview();
     el.arriveName.textContent = state.route ? state.route.point.name : '';
     el.arrive.hidden = false;
     document.body.classList.remove('is-nav');
@@ -3569,6 +3713,36 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       el.routeSteps.hidden = !open;
       el.routeStepsToggle.textContent = open ? 'Lépések elrejtése' : 'Lépések megjelenítése';
     });
+
+    // lépésről lépésre kattintgatás: a lépéssorra kattintva odanéz,
+    // a ‹ › nyilakkal végiglapozható az egész útvonal
+    el.routeSteps.addEventListener('click', function (e) {
+      var row = e.target.closest('.rstep');
+      if (!row || row.dataset.step == null) return;
+      previewStep(Number(row.dataset.step));
+    });
+    el.routeSteps.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var row = e.target.closest('.rstep');
+      if (!row || row.dataset.step == null) return;
+      e.preventDefault();
+      previewStep(Number(row.dataset.step));
+    });
+    el.stepPrev.addEventListener('click', function () {
+      if (stepIdx < 0) previewStep(0);
+      else if (stepIdx === 0) toast('Ez az első lépés');
+      else previewStep(stepIdx - 1);
+    });
+    el.stepNext.addEventListener('click', function () {
+      var steps = (state.route && state.route.steps) || [];
+      if (!steps.length) return;
+      if (stepIdx >= steps.length - 1) { toast('Megérkeztél a célhoz ⚑'); return; }
+      previewStep(stepIdx + 1);
+    });
+    el.stepReset.addEventListener('click', function () {
+      clearStepPreview();
+      fitRouteTo();
+    });
     // Indítás → appon belüli turn-by-turn navigáció
     el.routeStart.addEventListener('click', function () {
       if (nav) { toast('A navigáció már fut'); return; }
@@ -3579,6 +3753,24 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     // Navigációs HUD
     el.navExit.addEventListener('click', stopNavigation);
     el.navPreview.addEventListener('click', navPreviewNext);
+    // lépéslista: kinyitás / bezárás, lépésre kattintás → odanézés
+    el.navStepsBtn.addEventListener('click', function () {
+      if (el.navStepsPanel.hidden) openNavSteps();
+      else navStepsClose();
+    });
+    el.navStepsResume.addEventListener('click', navStepsClose);
+    el.navStepsList.addEventListener('click', function (e) {
+      var row = e.target.closest('.rstep');
+      if (!row || row.dataset.step == null) return;
+      navStepPreview(Number(row.dataset.step));
+    });
+    el.navStepsList.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var row = e.target.closest('.rstep');
+      if (!row || row.dataset.step == null) return;
+      e.preventDefault();
+      navStepPreview(Number(row.dataset.step));
+    });
     el.arriveOk.addEventListener('click', function () {
       el.arrive.hidden = true;
       stopNavigation();
@@ -3783,6 +3975,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'sosAddr', 'sosGo', 'sosNext', 'sosDetail', 'sosMoreList',
      'navView', 'navArrow', 'navDist', 'navStreet', 'navEta', 'navRemain', 'navTotal',
      'navExit', 'navPreview', 'navNext',
+     'navStepsBtn', 'navStepsPanel', 'navStepsList', 'navStepsResume',
      'arrive', 'arriveName', 'arriveOk',
      'overlay', 'overlayClose', 'overlayEyebrow', 'overlayTitle', 'overlayBody',
      'authView', 'authClose', 'authEyebrow', 'authTitle', 'authSub', 'authTabs',
@@ -3800,6 +3993,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'toast', 'loader', 'statAll', 'statAuto', 'statKezi', 'toolFilter', 'toolLocate', 'tool3D', 'mapTip',
      'routeCard', 'routeClose', 'routeModes', 'routeDist', 'routeTime', 'routeName',
      'routeAddr', 'routeSteps', 'routeStepsToggle', 'routeStart', 'routeGo', 'routeDetail',
+     'stepNav', 'stepPrev', 'stepNext', 'stepLabel', 'stepReset',
      'feedback', 'fbScores', 'fbTags', 'fbNote', 'fbSend', 'fbDelete', 'fbDone'
     ].forEach(function (id) { el[id] = $(id); });
 

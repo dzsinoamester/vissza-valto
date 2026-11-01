@@ -162,6 +162,14 @@
     <div class="route-steps" id="routeSteps" hidden></div>
     <button class="route-steps-toggle" id="routeStepsToggle" type="button" hidden>Lépések megjelenítése</button>
 
+    <!-- Lépésről lépésre kattintható előnézet (mint a nagy térképeknél) -->
+    <div class="step-nav" id="stepNav" hidden>
+      <button class="step-nav-btn" id="stepPrev" type="button" title="Előző lépés" aria-label="Előző lépés">‹</button>
+      <span class="step-nav-label" id="stepLabel">– / –</span>
+      <button class="step-nav-btn" id="stepNext" type="button" title="Következő lépés" aria-label="Következő lépés">›</button>
+      <button class="step-nav-reset" id="stepReset" type="button" title="Vissza az egész útvonalhoz">Vissza az útvonalhoz</button>
+    </div>
+
     <div class="route-actions">
       <button class="btn btn-primary btn-start" id="routeStart" type="button">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
@@ -277,11 +285,21 @@
       <div class="nav-eta"><b id="navEta">–</b><span>Érkezés</span></div>
       <div class="nav-remain"><b id="navRemain">–</b><span>Hátra</span></div>
       <div class="nav-total"><b id="navTotal">–</b><span>Távolság</span></div>
+      <button class="nav-nextprev" id="navStepsBtn" type="button" title="Lépések listája — végigkattinthatod az útvonalat">☰</button>
       <button class="nav-nextprev" id="navPreview" type="button" title="Következő lépés előnézete">›</button>
       <button class="nav-exit" id="navExit" type="button" title="Navigáció befejezése">✕</button>
     </div>
 
     <div class="nav-next" id="navNext" hidden></div>
+
+    <!-- Navigáció közben is kattintható lépéslista -->
+    <div class="nav-steps" id="navStepsPanel" hidden>
+      <div class="nav-steps-head">
+        <b>Útvonal lépései</b>
+        <button class="nav-steps-resume" id="navStepsResume" type="button">Vissza a navigációhoz</button>
+      </div>
+      <div class="nav-steps-list" id="navStepsList"></div>
+    </div>
   </div>
 
   <!-- ============ Megérkeztél ============ -->

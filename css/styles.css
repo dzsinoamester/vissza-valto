@@ -722,6 +722,85 @@ a { color: inherit; }
 }
 .route-steps-toggle:hover { color: var(--lime); border-color: rgba(216, 224, 47, .5); }
 
+/* kattintható lépések + aktív sor kiemelése */
+.rstep { cursor: pointer; transition: background .15s ease; }
+.rstep:hover { background: rgba(255, 255, 255, .05); }
+.rstep.is-active {
+  background: rgba(216, 224, 47, .12);
+  border-radius: 10px;
+  box-shadow: inset 3px 0 0 var(--lime);
+}
+.rstep.is-active .rstep-ico { background: var(--lime); color: #0A0B03; border-color: var(--lime); }
+
+/* lépésről lépésre léptető sáv */
+.step-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .04);
+}
+.step-nav-btn {
+  width: 34px; height: 34px;
+  flex: none;
+  border: 1px solid rgba(216, 224, 47, .35);
+  border-radius: 11px;
+  background: rgba(216, 224, 47, .12);
+  color: var(--lime);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform .15s ease, background .15s ease;
+}
+.step-nav-btn:hover { background: rgba(216, 224, 47, .24); transform: scale(1.06); }
+.step-nav-btn:active { transform: scale(.94); }
+.step-nav-label {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  min-width: 46px;
+  text-align: center;
+  flex: none;
+}
+.step-nav-reset {
+  margin-left: auto;
+  border: 1px dashed var(--line-2);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 7px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s ease;
+}
+.step-nav-reset:hover { color: var(--lime); border-color: rgba(216, 224, 47, .5); }
+
+/* a manőver helyén megjelenő lépés-jelölő a térképen */
+.step-marker {
+  width: 40px; height: 40px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #F0F66B, var(--lime) 55%, var(--lime-2));
+  color: #0A0B03;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  font-weight: 700;
+  border: 2px solid #0A0B03;
+  box-shadow: 0 14px 30px -10px #000, 0 0 22px -6px rgba(216, 224, 47, .8);
+  animation: pop .3s cubic-bezier(.2, .9, .3, 1.2) both;
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) {
+  .step-marker { animation: none; }
+  .rstep, .step-nav-btn, .step-nav-reset { transition: none; }
+}
+
 .route-actions { display: flex; gap: 8px; }
 .route-actions .btn-primary { flex: 1; }
 
@@ -1243,11 +1322,95 @@ body.is-nav .stage > .dock { display: none; }
 }
 .nav-next .nav-next-ico { color: var(--lime); font-size: 16px; flex: none; }
 
+/* navigáció közben kattintható lépéslista
+   (alap: telefon/tablet — legfeljebb a képernyő alsó fele, felette látszik a térkép) */
+.nav-steps {
+  flex: 0 1 auto;
+  max-height: 44vh;
+  margin: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  background: linear-gradient(170deg, rgba(12, 14, 10, .95), rgba(5, 6, 7, .97));
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  animation: navIn .3s cubic-bezier(.2, .9, .3, 1.1) both;
+}
+.nav-steps-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 12px 12px 16px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.nav-steps-head b {
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--lime);
+}
+.nav-steps-resume {
+  border: 1px dashed rgba(216, 224, 47, .5);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 11px;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.nav-steps-resume:hover { color: var(--lime); border-color: rgba(216, 224, 47, .8); }
+.nav-steps-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 12px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, .18) transparent;
+}
+.nav-steps-list::-webkit-scrollbar { width: 5px; }
+.nav-steps-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .18); border-radius: 3px; }
+.nav-steps-list .rstep { font-size: 13.5px; padding: 10px 0; }
+/* PC-n a HUD-hoz igazítva középre */
+@media (min-width: 901px) {
+  .nav-steps { max-width: 720px; width: 100%; margin: 8px auto 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-steps { animation: none; }
+}
+
 /* PC-n a navigációs HUD középre zárt kártyái (ne takarja a teljes képernyőt) */
 @media (min-width: 901px) {
   .nav-maneuver { max-width: 720px; width: 100%; margin: 14px auto 0; }
   .nav-summary  { max-width: 720px; width: 100%; margin: 0 auto; }
   .nav-next     { max-width: 720px; width: 100%; margin: 8px auto 0; }
+
+  /* a lépéslista bal oldali, teljes magasságú panelként — a térkép szabadon marad */
+  .nav-steps {
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    bottom: 14px;
+    width: 372px;
+    max-height: none;
+    margin: 0;
+  }
+  /* amíg a lista nyitva, a HUD-kártyák a lista melletti szabad helyen maradnak */
+  body.is-navsteps .nav-maneuver,
+  body.is-navsteps .nav-summary,
+  body.is-navsteps .nav-next {
+    margin-left: 400px;
+    margin-right: 14px;
+    max-width: 720px;
+  }
 }
 
 /* ===================== Megérkeztél ===================== */

@@ -26,6 +26,7 @@ egyszerűen megnyitva `index.html`-t fájl:// alól – de az adatbetöltéshez 
 | **Távolság** | „Itt vagyok" → a lista, a gyorskártya és a részletek is távolság szerint rendeződnek. |
 | **Részletek** | Nyitvatartás naponta (a mai nap kiemelve), navigáció Google / Waze / Apple Térképpel, cím másolása. |
 | **SOS mód** | Megkeresi a legközelebbi **nyitott** pontot, forgó iránytűvel és távolsággal; a „Következő" gombbal a további 4 legközelebbi között lapozhatsz. |
+| **Lépésről lépésre** | Az útvonal-kártyán és az appon belüli navigációban is végigkattinthatók a lépések (‹ n/N › léptető, ☰ lépéslista) – a manőver helye zöld jelölővel a térképen, a „Vissza" gombbal azonnal vissza a teljes útvonalhoz / valós idejű követéshez. |
 | **Mobil** | A panel alulra kerül, húzható lapkaként; a részletek alsó lapkaként nyílnak. |
 
 A bal felső sarokban a fejléc statisztikája és az adatok frissítésének dátuma látszik.
