@@ -82,6 +82,16 @@
       </div>
     </div>
 
+    <!-- Legutóbbi látogatás -->
+    <div class="recent" id="recentCard" hidden>
+      <div class="recent-main">
+        <span class="recent-label">Legutóbb itt váltottál</span>
+        <b id="recentName">–</b>
+        <small id="recentMeta"></small>
+      </div>
+      <button class="btn btn-primary recent-go" id="recentGo" type="button">Útvonal</button>
+    </div>
+
     <!-- Szűrők -->
     <div class="filters" role="group" aria-label="Szűrők">
       <button class="chip is-active" data-filter="all" type="button">Összes</button>
@@ -89,6 +99,7 @@
       <button class="chip chip-kezi" data-filter="kezi" type="button">Kézi</button>
       <button class="chip chip-open" data-filter="open" type="button">Most nyitva</button>
       <button class="chip chip-rate" data-filter="rated" type="button">Értékelt</button>
+      <button class="chip chip-fav" data-filter="fav" type="button">★ Kedvencek</button>
     </div>
 
     <!-- Rendezés -->
@@ -131,7 +142,7 @@
     <div class="route-nums">
       <div class="route-num">
         <b id="routeDist">–</b>
-        <span>tvolság</span>
+        <span>távolság</span>
       </div>
       <div class="route-num">
         <b id="routeTime">–</b>
@@ -289,6 +300,132 @@
     </div>
   </div>
 
+  <!-- ============ Első látogató: bemutató ============ -->
+  <div class="intro" id="introView" hidden role="dialog" aria-modal="true" aria-label="Bemutató: miben segít a Vissza!">
+    <div class="intro-card">
+      <div class="intro-top">
+        <span class="intro-brand">Vissza<b>!</b><em>REpont-kereső</em></span>
+        <button class="intro-skip" id="introClose" type="button" aria-label="Bemutató kihagyása">Kihagyás ✕</button>
+      </div>
+
+      <div class="intro-slides" id="introSlides">
+        <article class="intro-slide is-active">
+          <span class="intro-art" aria-hidden="true">
+            <svg viewBox="0 0 200 120" fill="none">
+              <rect x="14" y="12" width="172" height="96" rx="14" stroke="currentColor" stroke-opacity=".28"/>
+              <path d="M14 44h172M14 76h172M58 12v96M100 12v96M142 12v96" stroke="currentColor" stroke-opacity=".14"/>
+              <circle cx="58" cy="44" r="4" fill="currentColor" fill-opacity=".5"/>
+              <circle cx="142" cy="76" r="4" fill="currentColor" fill-opacity=".5"/>
+              <path d="M100 25c-9.4 0-17 7.6-17 17 0 12.5 17 28 17 28s17-15.5 17-28c0-9.4-7.6-17-17-17z" stroke="currentColor" stroke-width="2.6"/>
+              <circle cx="100" cy="42" r="6" fill="currentColor"/>
+            </svg>
+          </span>
+          <h3>Találd meg a legközelebbi REpontot</h3>
+          <p>Országos lefedettség, nyitvatartás és távolság egy pillantásra — a lista a helyzetedhez igazodik.</p>
+        </article>
+
+        <article class="intro-slide">
+          <span class="intro-art" aria-hidden="true">
+            <svg viewBox="0 0 200 120" fill="none">
+              <rect x="26" y="16" width="148" height="26" rx="13" stroke="currentColor" stroke-opacity=".3"/>
+              <circle cx="44" cy="29" r="5" fill="#2BD97C"/>
+              <path d="M60 29h96" stroke="currentColor" stroke-opacity=".35" stroke-width="4" stroke-linecap="round"/>
+              <rect x="26" y="47" width="148" height="26" rx="13" stroke="currentColor" stroke-opacity=".3"/>
+              <circle cx="44" cy="60" r="5" fill="#D8E02F"/>
+              <path d="M60 60h72" stroke="currentColor" stroke-opacity=".35" stroke-width="4" stroke-linecap="round"/>
+              <rect x="26" y="78" width="148" height="26" rx="13" stroke="currentColor" stroke-opacity=".3"/>
+              <circle cx="44" cy="91" r="5" fill="#FF7A45"/>
+              <path d="M60 91h60" stroke="currentColor" stroke-opacity=".35" stroke-width="4" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <h3>Lásd, nyitva van-e most</h3>
+          <p>A közösség jelzi, ha tele van vagy nem fogadja a palackot. A jelzés 2 óráig érvényes, és mindenkinek látszik.</p>
+        </article>
+
+        <article class="intro-slide">
+          <span class="intro-art" aria-hidden="true">
+            <svg viewBox="0 0 200 120" fill="none">
+              <path d="M32 92c24 0 24-32 48-32s24 32 48 32 24-24 44-36" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="8 8" stroke-opacity=".55"/>
+              <circle cx="32" cy="92" r="7" fill="currentColor"/>
+              <circle cx="172" cy="56" r="10" stroke="currentColor" stroke-width="3"/>
+              <path d="M172 50v6l4 3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <h3>Indulj el egy koppintással</h3>
+          <p>Autóval, kerékpárral vagy gyalog — valós távolság és idő, akár az appon belüli navigációval. Bajban ott az SOS.</p>
+        </article>
+      </div>
+
+      <div class="intro-dots" id="introDots" role="tablist" aria-label="Bemutató lépései">
+        <button class="intro-dot is-active" type="button" data-slide="0" role="tab" aria-selected="true" aria-label="1. lépés"></button>
+        <button class="intro-dot" type="button" data-slide="1" role="tab" aria-selected="false" aria-label="2. lépés"></button>
+        <button class="intro-dot" type="button" data-slide="2" role="tab" aria-selected="false" aria-label="3. lépés"></button>
+      </div>
+
+      <div class="intro-actions">
+        <button class="btn btn-primary" id="introRegister" type="button">Regisztrálok</button>
+        <div class="intro-actions-row">
+          <button class="btn btn-ghost" id="introLogin" type="button">Már van fiókom</button>
+          <button class="btn btn-ghost intro-next" id="introNext" type="button">Tovább →</button>
+        </div>
+        <button class="intro-guest" id="introGuest" type="button">Csak körülnézek</button>
+      </div>
+      <p class="intro-note">A térkép bejelentkezés nélkül is használható.</p>
+    </div>
+  </div>
+
+  <!-- ============ Bejelentkezés / Regisztráció ============ -->
+  <div class="auth" id="authView" hidden role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <div class="auth-card">
+      <button class="overlay-close" id="authClose" type="button" aria-label="Bezárás">✕</button>
+
+      <span class="overlay-eyebrow" id="authEyebrow">Fiók</span>
+      <h3 id="authTitle">Jelentkezz be</h3>
+      <p class="auth-sub" id="authSub">Az értékeléseid így minden eszközödön meglesznek.</p>
+
+      <div class="auth-tabs" id="authTabs" role="tablist" aria-label="Fiók művelet">
+        <button class="auth-tab is-active" id="authTabLogin" data-tab="login" type="button" role="tab" aria-selected="true">Bejelentkezés</button>
+        <button class="auth-tab" id="authTabRegister" data-tab="register" type="button" role="tab" aria-selected="false">Regisztráció</button>
+      </div>
+
+      <form class="auth-form" id="authForm" novalidate>
+        <label class="auth-field" id="authNameField" hidden>
+          <span>Megjelenített név</span>
+          <input type="text" id="authName" autocomplete="nickname" maxlength="40" placeholder="Pl. Kovács Anna">
+        </label>
+
+        <label class="auth-field" id="authEmailField">
+          <span>E-mail</span>
+          <input type="email" id="authEmail" autocomplete="email" inputmode="email" required placeholder="te@example.com">
+        </label>
+
+        <label class="auth-field" id="authPasswordField">
+          <span>Jelszó</span>
+          <input type="password" id="authPassword" autocomplete="current-password" placeholder="Legalább 6 karakter">
+        </label>
+
+        <label class="auth-field" id="authPassword2Field" hidden>
+          <span>Jelszó mégegyszer</span>
+          <input type="password" id="authPassword2" autocomplete="new-password" placeholder="Ismételd meg">
+        </label>
+
+        <div class="auth-msg" id="authMsg" hidden></div>
+
+        <button class="btn btn-primary auth-submit" id="authSubmit" type="submit">Bejelentkezés</button>
+
+        <div class="auth-links">
+          <button class="auth-link" id="authForgot" type="button">Elfelejtett jelszó?</button>
+          <button class="auth-link" id="authBack" type="button" hidden>← Vissza a bejelentkezéshez</button>
+        </div>
+      </form>
+
+      <p class="auth-note">
+        A jelszót a Supabase Auth kezeli, ez az oldal nem tárolja. A fiókod bármikor törölheted
+        a profilodból — ezzel az értékeléseid is törlődnek.
+      </p>
+    </div>
+  </div>
+
   <!-- Betöltés -->
   <div class="loader" id="loader">
     <div class="loader-logo">Vissza<b>!</b></div>
@@ -301,31 +438,81 @@
 <div class="sheet-scrim" id="sheetScrim" hidden></div>
 <section class="sheet" id="sheet" hidden aria-modal="true" role="dialog">
   <div class="sheet-grip" aria-hidden="true"></div>
-  <button class="sheet-close" id="sheetClose" type="button" aria-label="Bezárás">✕</button>
 
-  <div class="sheet-type" id="sheetType">AUTOMATA</div>
-  <h2 id="sheetName">–</h2>
-  <div class="sheet-addr" id="sheetAddr">–</div>
+  <div class="sheet-hero">
+    <div class="sheet-mini" id="sheetMini" aria-hidden="true"></div>
+    <div class="sheet-hero-fade" aria-hidden="true"></div>
+    <span class="sheet-mini-credit" aria-hidden="true">© OpenStreetMap</span>
 
-  <div class="sheet-status">
-    <span id="sheetStatus"></span>
-    <span class="sheet-dist" id="sheetDist"></span>
-    <span class="sheet-rate" id="sheetRate" hidden></span>
+    <span class="sheet-pin" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="30" height="30"><path d="M12 2.4c-4.3 0-7.8 3.5-7.8 7.8 0 5.8 7.8 12.2 7.8 12.2s7.8-6.4 7.8-12.2c0-4.3-3.5-7.8-7.8-7.8z" fill="rgba(216,224,47,.18)" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="10.2" r="2.7" fill="currentColor"/></svg>
+    </span>
+
+    <div class="sheet-hero-top">
+      <span class="sheet-type automata" id="sheetType">AUTOMATA</span>
+      <div class="sheet-hero-tools">
+        <button class="sheet-icon-btn" id="sheetFav" type="button" aria-pressed="false" aria-label="Hozzáadás a kedvencekhez">
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="sheet-close" id="sheetClose" type="button" aria-label="Bezárás">✕</button>
+      </div>
+    </div>
+
+    <div class="sheet-hero-body">
+      <h2 id="sheetName">–</h2>
+      <div class="sheet-addr-row">
+        <span id="sheetAddr">–</span>
+        <button class="sheet-copy" id="copyAddr" type="button" aria-label="Cím másolása" title="Cím másolása">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15 5.5H6.4A1.9 1.9 0 0 0 4.5 7.4V16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
   </div>
 
-  <table class="hours" id="sheetHours">
-    <tbody></tbody>
-  </table>
+  <div class="sheet-status is-open" id="sheetStatusBox">
+    <span class="sheet-status-text" id="sheetStatusText">–</span>
+    <span class="sheet-status-sub" id="sheetStatusSub"></span>
+    <i class="sheet-status-bar" id="sheetStatusBar" aria-hidden="true"></i>
+    <div class="sheet-status-meta">
+      <span class="sheet-dist" id="sheetDist"></span>
+      <span class="sheet-rate" id="sheetRate" hidden></span>
+      <span class="sheet-community" id="sheetCommunity" hidden></span>
+    </div>
+  </div>
+
+  <div class="hours-block" id="hoursBlock">
+    <table class="hours" id="sheetHours">
+      <tbody></tbody>
+    </table>
+    <button class="hours-toggle" id="hoursToggle" type="button" aria-expanded="false">Teljes nyitvatartás</button>
+  </div>
 
   <div class="sheet-actions">
-    <button class="btn btn-primary" id="sheetRoute" type="button">
-      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M6.4 2.5 2 6.9l4.4 4.4 1.4-1.4L4.8 7.3l1.6-1.6 3 3 1.4-1.4-3-3.1A2 2 0 0 0 6.4 2.5zM12 11h7a3 3 0 0 1 3 3v1.5a4.5 4.5 0 0 1-9 0V13h2v2.5a2.5 2.5 0 0 0 5 0V14a1 1 0 0 0-1-1h-7v2h2v1.5a4.5 4.5 0 0 1-9 0V14a3 3 0 0 1 3-3z" fill="currentColor"/></svg>
+    <button class="btn btn-primary sheet-route-btn" id="sheetRoute" type="button">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M12 20.6s6.6-6.1 6.6-10.6a6.6 6.6 0 1 0-13.2 0c0 4.5 6.6 10.6 6.6 10.6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="9.8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
       Útvonal ide
     </button>
-    <a class="btn btn-ghost" id="navGoogle" href="#" target="_blank" rel="noopener">Google</a>
-    <a class="btn btn-ghost" id="navWaze" href="#" target="_blank" rel="noopener">Waze</a>
-    <a class="btn btn-ghost" id="navApple" href="#" target="_blank" rel="noopener">Apple</a>
-    <button class="btn btn-ghost" id="copyAddr" type="button">Cím másolása</button>
+  </div>
+
+  <div class="sheet-nav" role="group" aria-label="Megnyitás másik alkalmazásban">
+    <span class="sheet-nav-label">Megnyitás</span>
+    <a class="sheet-nav-btn" id="navGoogle" href="#" target="_blank" rel="noopener">Google<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 16 16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></a>
+    <a class="sheet-nav-btn" id="navWaze" href="#" target="_blank" rel="noopener">Waze<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 16 16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></a>
+    <a class="sheet-nav-btn" id="navApple" href="#" target="_blank" rel="noopener">Apple<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 16 16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></a>
+  </div>
+
+  <!-- ============ Üzemállapot ============ -->
+  <div class="reports" id="reportsBox">
+    <div class="reports-head">
+      <span class="fb-eyebrow">Üzemállapot</span>
+      <span class="reports-status" id="reportStatus">Nincs friss jelzés</span>
+    </div>
+    <div class="reports-actions" id="reportBtns" role="group" aria-label="Üzemállapot jelentése">
+      <button class="report-btn" data-report="tele" type="button">Tele van</button>
+      <button class="report-btn" data-report="urult" type="button">Kiürült</button>
+      <button class="report-btn" data-report="hibas" type="button">Nem fogadja</button>
+    </div>
+    <p class="reports-hint">A jelzés 2 óráig érvényes, és mindenkinek látszik a térképen. Jelenteni bejelentkezve tudsz.</p>
   </div>
 
   <!-- ============ Visszajelzés ============ -->
@@ -362,6 +549,8 @@
 
 <div class="toast" id="toast" hidden></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

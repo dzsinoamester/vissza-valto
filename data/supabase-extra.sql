@@ -1,6 +1,7 @@
 -- ============================================================
 --  REpontCheck – kiegészítő beállítások (futtasd az SQL Editorban)
 --  Az első SQL (profiles + ratings tábla) után kell lefuttatni.
+--  Minden lépés idempotens, nyugodtan újrafuttatható.
 -- ============================================================
 
 -- 1) A profiles tábla védelme (enélkül bárki olvashatná az anon kulccsal!)
@@ -38,17 +39,29 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- 3) Saját fiók törlése (az app „Fiók törlése” gombja ezt hívja)
+--    Az app adatait előbb töröljük, így akkor is működik, ha egy táblán
+--    nincs ON DELETE CASCADE a auth.users felé.
 create or replace function public.delete_my_account()
 returns void
 language plpgsql
 security definer
 set search_path = public, auth
 as $$
+declare
+  uid uuid := auth.uid();
 begin
-  if auth.uid() is null then
+  if uid is null then
     raise exception 'not authenticated';
   end if;
-  delete from auth.users where id = auth.uid();   -- a profil és az értékelések is törlődnek (cascade)
+
+  if to_regclass('public.ratings') is not null then
+    delete from public.ratings where user_id = uid;
+  end if;
+  delete from public.profiles where id = uid;
+
+  -- maga az auth felhasználó (a security definer miatt a függvény tulajdonosa,
+  -- azaz a postgres role törli)
+  delete from auth.users where id = uid;
 end;
 $$;
 

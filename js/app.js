@@ -15,6 +15,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   var NAV_APPLE  = 'https://maps.apple.com/?daddr=';
 
   var OSRM = 'https://router.project-osrm.org/route/v1/';
+  // Az OSRM nyilvános demója csak autós profilt számol (a kerékpár/gyalog kérésre is
+  // autós időt ad), ezért bringához és gyalogláshoz Valhallát használunk.
+  var VALHALLA = 'https://valhalla1.openstreetmap.de/route';
+  var MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark';
 
   var EMPTY_FC = { type: 'FeatureCollection', features: [] };
 
@@ -218,6 +222,41 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   var OPEN_LABEL = { open: 'Nyitva', soon: 'Hamararát zár', closed: 'Zárva', unknown: 'Nincs adat' };
 
+  var DAY_NAMES = { 0: 'vasárnap', 1: 'hétfő', 2: 'kedd', 3: 'szerda', 4: 'csütörtök', 5: 'péntek', 6: 'szombat' };
+
+  function dayRange(hrs, day) {
+    if (!hrs) return null;
+    return day === 0 ? hrs.v : (day === 6 ? hrs.s : hrs.h);
+  }
+
+  function clockText(mins) {
+    var h = Math.floor(mins / 60) % 24;
+    var m = mins % 60;
+    return h + ':' + (m < 10 ? '0' + m : m);
+  }
+
+  function leftText(mins) {
+    mins = Math.max(0, Math.round(mins));
+    if (mins < 60) return mins + ' perc';
+    var h = Math.floor(mins / 60), m = mins % 60;
+    return h + ' óra' + (m ? ' ' + m + ' perc' : '');
+  }
+
+  // Mikor nyit legközelebb? (ma még később, vagy a következő nyitott napon)
+  function nextOpenText(hrs, day, mins) {
+    if (!hrs) return '';
+    var r = dayRange(hrs, day);
+    if (r && r.close > r.open && mins < r.open) return 'ma ' + clockText(r.open) + '-kor nyit';
+    for (var i = 1; i <= 7; i++) {
+      var d = (day + i) % 7;
+      var nr = dayRange(hrs, d);
+      if (nr && nr.close > nr.open) {
+        return (i === 1 ? 'holnap ' : DAY_NAMES[d] + ' ') + clockText(nr.open) + '-kor nyit';
+      }
+    }
+    return '';
+  }
+
   function pillClass(st) {
     return st === 'open' ? 'yes' : (st === 'soon' ? 'soon' : (st === 'closed' ? 'no' : 'unknown'));
   }
@@ -389,10 +428,764 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   /* ==================== térkép ==================== */
 
+  /* ==================== bejelentkezés (Supabase) ==================== */
+
+  var sb = null;                                    // Supabase kliens
+  var account = { user: null, profile: null };      // bejelentkezett fiók
+  var authMode = 'login';                           // login | register | forgot | reset
+  var authBusy = false;
+  var overlayKind = null;
+
+  var AUTH_COPY = {
+    login:    { eyebrow: 'Fiók',         title: 'Jelentkezz be',      sub: 'Az értékeléseid így minden eszközödön meglesznek.',           submit: 'Bejelentkezés' },
+    register: { eyebrow: 'Regisztráció', title: 'Új fiók',            sub: 'Egy e-mail-cím és egy jelszó — ennyi kell.',                  submit: 'Fiók létrehozása' },
+    forgot:   { eyebrow: 'Jelszó',       title: 'Elfelejtett jelszó', sub: 'Add meg az e-mail-címed, és küldünk egy visszaállító linket.', submit: 'Visszaállító link küldése' },
+    reset:    { eyebrow: 'Jelszó',       title: 'Új jelszó',          sub: 'Adj meg egy új jelszót a fiókodhoz.',                          submit: 'Jelszó mentése' }
+  };
+
+  function authRedirect() {
+    return (location.protocol === 'http:' || location.protocol === 'https:')
+      ? location.origin + location.pathname
+      : undefined;
+  }
+
+  function authErr(e) {
+    var m = String((e && (e.message || e.error_description || e.msg)) || 'Ismeretlen hiba történt.');
+    var low = m.toLowerCase();
+    if (low.indexOf('invalid login credentials') !== -1) return 'Hibás e-mail vagy jelszó.';
+    if (low.indexOf('email not confirmed') !== -1) return 'Erősítsd meg az e-mail-címedet a kiküldött levélben, majd jelentkezz be.';
+    if (low.indexOf('already registered') !== -1 || low.indexOf('already been registered') !== -1) return 'Ezzel az e-mail-címmel már létezik fiók — jelentkezz be.';
+    if (low.indexOf('password should be') !== -1 || low.indexOf('password is too short') !== -1) return 'A jelszó legalább 6 karakter legyen.';
+    if (low.indexOf('unable to validate email') !== -1 || low.indexOf('invalid email') !== -1) return 'Érvénytelen e-mail-cím.';
+    if (low.indexOf('rate limit') !== -1 || low.indexOf('too many requests') !== -1) return 'Túl sok próbálkozás — várj egy percet, majd próbáld újra.';
+    if (low.indexOf('could not find the function') !== -1 || low.indexOf('pgrst202') !== -1) return 'A fióktörlő függvény hiányzik az adatbázisból: futtasd a data/supabase-extra.sql-t a Supabase SQL Editorban, majd próbáld újra.';
+    if (low.indexOf('permission denied') !== -1) return 'Nincs jogosultság a művelethez: futtasd újra a data/supabase-extra.sql-t (grant execute).';
+    if (low.indexOf('database error') !== -1 || low.indexOf('relation') !== -1) return 'Az adatbázis nincs előkészítve: futtasd a data/supabase-schema.sql, majd a data/supabase-extra.sql fájlt.';
+    if (low.indexOf('failed to fetch') !== -1 || low.indexOf('networkerror') !== -1) return 'Nincs kapcsolat a szerverrel — ellenőrizd az internetet.';
+    return m;
+  }
+
+  function displayName() {
+    if (account.profile && account.profile.display_name) return account.profile.display_name;
+    var meta = account.user && account.user.user_metadata;
+    if (meta && meta.display_name) return meta.display_name;
+    if (account.user && account.user.email) return account.user.email.split('@')[0];
+    return 'Vendég';
+  }
+
+  function authMessage(text, kind) {
+    if (!el.authMsg) return;
+    if (!text) {
+      el.authMsg.hidden = true;
+      el.authMsg.className = 'auth-msg';
+      el.authMsg.textContent = '';
+      return;
+    }
+    el.authMsg.hidden = false;
+    el.authMsg.className = 'auth-msg is-' + (kind || 'info');
+    el.authMsg.textContent = text;
+  }
+
+  function authSetBusy(on, label) {
+    authBusy = !!on;
+    if (!el.authSubmit) return;
+    el.authSubmit.disabled = !!on || !sb;
+    el.authSubmit.textContent = on ? (label || 'Folyamatban…') : AUTH_COPY[authMode].submit;
+  }
+
+  function authSetMode(mode) {
+    authMode = AUTH_COPY[mode] ? mode : 'login';
+    if (!el.authView) return;
+    authMessage('');
+
+    var copy = AUTH_COPY[authMode];
+    el.authEyebrow.textContent = copy.eyebrow;
+    el.authTitle.textContent = copy.title;
+    el.authSub.textContent = copy.sub;
+    el.authSubmit.textContent = copy.submit;
+    el.authSubmit.disabled = !sb;
+
+    el.authTabs.hidden = (authMode === 'forgot' || authMode === 'reset');
+    el.authTabLogin.classList.toggle('is-active', authMode === 'login');
+    el.authTabRegister.classList.toggle('is-active', authMode === 'register');
+    el.authTabLogin.setAttribute('aria-selected', authMode === 'login' ? 'true' : 'false');
+    el.authTabRegister.setAttribute('aria-selected', authMode === 'register' ? 'true' : 'false');
+
+    el.authNameField.hidden = authMode !== 'register';
+    el.authEmailField.hidden = authMode === 'reset';
+    el.authPasswordField.hidden = authMode === 'forgot';
+    el.authPassword2Field.hidden = (authMode !== 'register' && authMode !== 'reset');
+
+    el.authPassword.setAttribute('autocomplete', authMode === 'login' ? 'current-password' : 'new-password');
+    el.authPassword.placeholder = authMode === 'reset' ? 'Új jelszó' : 'Legalább 6 karakter';
+    el.authForgot.hidden = authMode !== 'login';
+    el.authBack.hidden = (authMode !== 'forgot' && authMode !== 'reset');
+
+    if (!sb) authMessage('A bejelentkezés most nem érhető el: hiányzik a Supabase SDK vagy a js/config.js beállítása.', 'error');
+  }
+
+  function authOpen(mode) {
+    if (!el.authView) return;
+    el.authView.hidden = false;
+    document.body.classList.add('is-auth');
+    authSetMode(mode || 'login');
+    setTimeout(function () {
+      var f = (authMode === 'login' || authMode === 'forgot') ? el.authEmail : el.authPassword;
+      try { if (f) f.focus(); } catch (e) { }
+    }, 80);
+  }
+
+  function authClose() {
+    if (!el.authView) return;
+    el.authView.hidden = true;
+    document.body.classList.remove('is-auth');
+    authMessage('');
+    authSetBusy(false);
+  }
+
+  /* ==================== első látogató: bemutató ==================== */
+
+  var INTRO_KEY = 'vissza:intro-seen';
+  var introIndex = 0;
+
+  function introSeen() { return readJSON(INTRO_KEY, false) === true; }
+
+  function introSlide(i) {
+    if (!el.introSlides) return;
+    var slides = el.introSlides.children;
+    if (!slides.length) return;
+    introIndex = Math.max(0, Math.min(i, slides.length - 1));
+    Array.prototype.forEach.call(slides, function (s, k) {
+      s.classList.toggle('is-active', k === introIndex);
+    });
+    if (el.introDots) {
+      Array.prototype.forEach.call(el.introDots.children, function (d, k) {
+        d.classList.toggle('is-active', k === introIndex);
+        d.setAttribute('aria-selected', k === introIndex ? 'true' : 'false');
+      });
+    }
+    if (el.introNext) el.introNext.hidden = introIndex >= slides.length - 1;
+  }
+
+  function introShow() {
+    if (!el.introView) return;
+    introSlide(0);
+    el.introView.hidden = false;
+    document.body.classList.add('is-intro');
+    setTimeout(function () {
+      try { if (el.introRegister) el.introRegister.focus(); } catch (e) { }
+    }, 90);
+  }
+
+  function introHide() {
+    if (!el.introView || el.introView.hidden) return;
+    el.introView.hidden = true;
+    document.body.classList.remove('is-intro');
+    writeJSON(INTRO_KEY, true);
+  }
+
+  function introStart(mode) {
+    introHide();
+    authOpen(mode);
+  }
+
+  // Csak első látogatáskor, bejelentkezés és konkrét link nélkül.
+  function maybeIntro() {
+    if (!el.introView || account.user || introSeen()) return;
+    if (location.hash) return;
+    introShow();
+  }
+
+  function authRun(promise, label) {
+    authSetBusy(true, label);
+    return Promise.resolve(promise).then(
+      function (r) { authSetBusy(false); return r; },
+      function (e) { authSetBusy(false); throw e; }
+    );
+  }
+
+  function initAuth() {
+    var cfg = window.VISSZA_CONFIG || {};
+    if (!window.supabase || !window.supabase.createClient) {
+      console.warn('[fiók] A Supabase SDK nem töltődött be (CDN).');
+      return;
+    }
+    if (!cfg.SUPABASE_URL || !cfg.SUPABASE_KEY) {
+      console.warn('[fiók] Hiányzik a SUPABASE_URL / SUPABASE_KEY a js/config.js-ből.');
+      return;
+    }
+    try {
+      sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
+    } catch (e) {
+      console.warn('[fiók] A Supabase kliens nem indult el:', e && e.message);
+      sb = null;
+      return;
+    }
+
+    sb.auth.onAuthStateChange(function (event, session) {
+      if (event === 'PASSWORD_RECOVERY') {
+        account.user = session && session.user ? session.user : null;
+        authOpen('reset');
+        return;
+      }
+      // a visszahívásban ne blokkoljunk: a Supabase auth-zárát elkerüljük
+      setTimeout(function () { applySession(session); }, 0);
+    });
+
+    sb.auth.getSession().then(function (res) {
+      applySession(res && res.data ? res.data.session : null);
+    }).catch(function () { });
+
+    authSetMode('login');
+  }
+
+  function applySession(session) {
+    account.user = session && session.user ? session.user : null;
+    if (!account.user) account.profile = null;
+    paintAccount();
+    if (account.user) introHide();
+    if (account.user) {
+      loadProfile();
+      if (social.accountUser !== account.user.id) {
+        social.accountUser = account.user.id;
+        loadAccountSocial();
+      }
+    } else {
+      social.accountUser = null;
+    }
+  }
+
+  function loadProfile() {
+    if (!sb || !account.user) return Promise.resolve();
+    return sb.from('profiles').select('display_name').eq('id', account.user.id).maybeSingle()
+      .then(function (res) {
+        if (!res.error && res.data) { account.profile = res.data; paintAccount(); }
+      })
+      .catch(function () { });
+  }
+
+  function paintAccount() {
+    if (el.dockProfile) {
+      el.dockProfile.classList.toggle('is-logged-in', !!account.user);
+      el.dockProfile.title = account.user ? ('Profilom — ' + displayName()) : 'Profilom / bejelentkezés';
+    }
+    if (overlayKind === 'profile' && el.overlay && !el.overlay.hidden) openOverlay('profile');
+  }
+
+  function accountHeadHtml() {
+    if (!account.user) {
+      return '<div class="account-head">' +
+        '<span class="account-avatar">?</span>' +
+        '<div class="account-main"><b>Vendégként nézelődsz</b>' +
+        '<small>Jelentkezz be, hogy az értékeléseid megmaradjanak.</small></div>' +
+        '</div>';
+    }
+    var name = displayName();
+    var initial = String(name).trim().charAt(0).toUpperCase() || '?';
+    return '<div class="account-head">' +
+      '<span class="account-avatar">' + esc(initial) + '</span>' +
+      '<div class="account-main"><b>' + esc(name) + '</b>' +
+      '<small>' + esc(account.user.email || '') + '</small></div>' +
+      '</div>';
+  }
+
+  function accountActionsHtml() {
+    if (!sb) {
+      return '<div class="account-note">A fiók most nem elérhető — hiányzik a Supabase SDK vagy a js/config.js beállítása.</div>';
+    }
+    if (!account.user) {
+      return '<div class="account-actions">' +
+        '<button class="btn btn-primary" type="button" data-account="login">Bejelentkezés</button>' +
+        '<button class="btn btn-ghost" type="button" data-account="register">Regisztráció</button>' +
+        '<button class="btn btn-ghost" type="button" data-account="intro">Bemutató</button>' +
+        '</div>';
+    }
+    return '<div class="account-actions">' +
+        '<button class="btn" type="button" data-account="password">Jelszó módosítása</button>' +
+        '<button class="btn btn-ghost" type="button" data-account="intro">Bemutató újra</button>' +
+        '<button class="btn btn-ghost" type="button" data-account="logout">Kijelentkezés</button>' +
+      '</div>' +
+      '<div class="account-actions">' +
+        '<button class="btn account-danger" type="button" data-account="delete">Fiók törlése</button>' +
+      '</div>';
+  }
+
+  function authSubmit() {
+    if (authBusy) return;
+    if (!sb) { authMessage('A bejelentkezés most nem érhető el (Supabase beállítás hiányzik).', 'error'); return; }
+
+    var email = el.authEmail.value.trim();
+    var pass = el.authPassword.value;
+    var pass2 = el.authPassword2.value;
+
+    if (authMode === 'reset') {
+      if (pass.length < 6) { authMessage('A jelszó legalább 6 karakter legyen.', 'error'); return; }
+      if (pass !== pass2) { authMessage('A két jelszó nem egyezik.', 'error'); return; }
+      authRun(sb.auth.updateUser({ password: pass }), 'Mentés…')
+        .then(function (res) {
+          if (res.error) throw res.error;
+          el.authPassword.value = '';
+          el.authPassword2.value = '';
+          authMessage('A jelszó frissítve. Most már ezzel tudsz belépni.', 'ok');
+          setTimeout(authClose, 1500);
+        })
+        .catch(function (e) { authMessage(authErr(e), 'error'); });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      authMessage('Adj meg egy érvényes e-mail-címet.', 'error');
+      return;
+    }
+
+    if (authMode === 'forgot') {
+      authRun(sb.auth.resetPasswordForEmail(email, { redirectTo: authRedirect() }), 'Küldés…')
+        .then(function (res) {
+          if (res.error) throw res.error;
+          authMessage('Elküldtük a visszaállító linket a(z) ' + email + ' címre. Nézd meg a postafiókod (a spam mappát is).', 'ok');
+        })
+        .catch(function (e) { authMessage(authErr(e), 'error'); });
+      return;
+    }
+
+    if (authMode === 'register') {
+      if (pass.length < 6) { authMessage('A jelszó legalább 6 karakter legyen.', 'error'); return; }
+      if (pass !== pass2) { authMessage('A két jelszó nem egyezik.', 'error'); return; }
+      var name = el.authName.value.trim().slice(0, 40);
+
+      authRun(sb.auth.signUp({
+        email: email,
+        password: pass,
+        options: { data: { display_name: name || null }, emailRedirectTo: authRedirect() }
+      }), 'Fiók létrehozása…')
+        .then(function (res) {
+          if (res.error) throw res.error;
+          var u = res.data && res.data.user;
+          if (u && Array.isArray(u.identities) && u.identities.length === 0) {
+            authSetMode('login');
+            authMessage('Ezzel az e-mail-címmel már létezik fiók — jelentkezz be.', 'error');
+            return;
+          }
+          el.authPassword.value = '';
+          el.authPassword2.value = '';
+          if (res.data && res.data.session) {
+            authMessage('A fiók elkészült — üdvözlünk!', 'ok');
+            setTimeout(authClose, 900);
+          } else {
+            authSetMode('login');
+            authMessage('Elküldtük a megerősítő levelet a(z) ' + email + ' címre. Kattints a linkre, utána jelentkezz be.', 'ok');
+          }
+        })
+        .catch(function (e) { authMessage(authErr(e), 'error'); });
+      return;
+    }
+
+    if (!pass) { authMessage('Add meg a jelszavad.', 'error'); return; }
+    authRun(sb.auth.signInWithPassword({ email: email, password: pass }), 'Belépés…')
+      .then(function (res) {
+        if (res.error) throw res.error;
+        el.authPassword.value = '';
+        authMessage('Sikeres bejelentkezés.', 'ok');
+        setTimeout(authClose, 700);
+      })
+      .catch(function (e) { authMessage(authErr(e), 'error'); });
+  }
+
+  function authSignOut() {
+    var done = function () {
+      account = { user: null, profile: null };
+      paintAccount();
+      toast('Kijelentkeztél');
+    };
+    if (!sb) { done(); return; }
+    sb.auth.signOut().then(done, done);
+  }
+
+  function accountStatus(text, kind) {
+    if (!el.overlayBody) return;
+    var box = el.overlayBody.querySelector('.account-status');
+    if (!text) { if (box) box.remove(); return; }
+    if (!box) {
+      box = document.createElement('div');
+      el.overlayBody.appendChild(box);
+    }
+    box.className = 'auth-msg is-' + (kind || 'info') + ' account-status';
+    box.textContent = text;
+  }
+
+  function authDeleteAccount() {
+    if (!sb || !account.user) return;
+    if (!window.confirm('Biztosan törlöd a fiókodat? Az értékeléseid is törlődnek, és ezt nem lehet visszavonni.')) return;
+    accountStatus('Törlés folyamatban…', 'info');
+
+    sb.rpc('delete_my_account').then(function (res) {
+      if (res.error) throw res.error;
+      return sb.auth.signOut({ scope: 'local' }).catch(function () { });
+    }).then(function () {
+      account = { user: null, profile: null };
+      paintAccount();
+      if (overlayKind === 'profile') closeOverlay();
+      toast('A fiókodat töröltük.');
+    }).catch(function (e) {
+      toast('A törlés nem sikerült: ' + authErr(e));
+      accountStatus('A törlés nem sikerült: ' + authErr(e), 'error');
+    });
+  }
+
+  /* ==================== közösségi állapot (jelentés, értékelés, kedvenc) ==================== */
+
+  var FAV_KEY = 'vissza.favorites.v1';
+  var VISIT_KEY = 'vissza.visits.v1';
+  var REPORT_TTL = 2 * 60 * 60 * 1000;      // a jelzés ennyi ideig érvényes
+
+  var REPORTS = {
+    tele:  { label: 'Tele van',    past: 'tele van',    cls: 'is-tele' },
+    urult: { label: 'Kiürült',     past: 'kiürült',     cls: 'is-urult' },
+    hibas: { label: 'Nem fogadja', past: 'nem fogadja', cls: 'is-hibas' }
+  };
+
+  var social = {
+    reports: {},      // id -> { status, at, count }
+    remote: {},       // id -> { avg, votes }  (közösségi átlag)
+    favs: {},         // id -> true
+    visits: [],       // [{ id, at }] legutóbbi elöl
+    accountUser: null
+  };
+
+  function readJSON(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) { return fallback; }
+  }
+
+  function writeJSON(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { }
+  }
+
+  function initSocial() {
+    var favs = readJSON(FAV_KEY, []);
+    if (Array.isArray(favs)) favs.forEach(function (id) { social.favs[id] = true; });
+    var vis = readJSON(VISIT_KEY, []);
+    if (Array.isArray(vis)) {
+      social.visits = vis.filter(function (v) { return v && v.id != null; })
+        .sort(function (a, b) { return (b.at || 0) - (a.at || 0); }).slice(0, 8);
+    }
+    renderRecent();
+  }
+
+  /* --- kedvencek --- */
+
+  function isFav(id) { return !!social.favs[id]; }
+
+  function toggleFav(id) {
+    if (isFav(id)) delete social.favs[id]; else social.favs[id] = true;
+    writeJSON(FAV_KEY, Object.keys(social.favs).map(Number));
+
+    if (sb && account.user) {
+      if (isFav(id)) {
+        sb.from('favorites').insert({ user_id: account.user.id, point_id: id })
+          .then(function (r) { if (r.error && r.error.code !== '23505') console.warn('[kedvenc]', r.error.message); });
+      } else {
+        sb.from('favorites').delete().eq('user_id', account.user.id).eq('point_id', id)
+          .then(function (r) { if (r.error) console.warn('[kedvenc]', r.error.message); });
+      }
+    }
+
+    applyFilters();
+    if (selectedId === id) refreshSheetFav();
+    toast(isFav(id) ? 'Kedvencekhez adva ★' : 'Eltávolítva a kedvencek közül');
+  }
+
+  function refreshSheetFav() {
+    if (!el.sheetFav) return;
+    var on = selectedId != null && isFav(selectedId);
+    el.sheetFav.classList.toggle('is-fav', on);
+    el.sheetFav.setAttribute('aria-pressed', on ? 'true' : 'false');
+    el.sheetFav.setAttribute('aria-label', on ? 'Eltávolítás a kedvencekből' : 'Hozzáadás a kedvencekhez');
+    el.sheetFav.title = el.sheetFav.getAttribute('aria-label');
+  }
+
+  /* --- üzemállapot --- */
+
+  function reportOf(id) { return social.reports[id] || null; }
+
+  function agoText(ts) {
+    var m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+    if (m < 1) return 'most';
+    if (m < 60) return m + ' perce';
+    return Math.round(m / 60) + ' órája';
+  }
+
+  function reportChipHtml(id) {
+    var r = reportOf(id), meta = r && REPORTS[r.status];
+    if (!meta) return '';
+    return '<span class="report-chip ' + meta.cls + '">' + agoText(r.at) + ' ' + meta.past +
+      (r.count > 1 ? ' · ' + r.count + ' jelzés' : '') + '</span>';
+  }
+
+  function communityOf(id) { return social.remote[id] || null; }
+
+  function communityBadgeHtml(id) {
+    var c = communityOf(id);
+    if (!c || !c.votes) return '';
+    return '<span class="score score-comm score-xs" title="Közösségi átlag">★ ' +
+      String(c.avg).replace('.', ',') + '</span>';
+  }
+
+  function refreshSheetSocial() {
+    if (!el.reportStatus) return;
+    var r = selectedId != null ? reportOf(selectedId) : null;
+    var meta = r && REPORTS[r.status];
+    if (meta) {
+      el.reportStatus.textContent = agoText(r.at) + ' ' + meta.past +
+        (r.count > 1 ? ' · ' + r.count + ' jelzés' : '');
+      el.reportStatus.className = 'reports-status ' + meta.cls;
+    } else {
+      el.reportStatus.textContent = 'Nincs friss jelzés';
+      el.reportStatus.className = 'reports-status';
+    }
+    if (el.reportBtns) {
+      Array.prototype.forEach.call(el.reportBtns.children, function (b) {
+        b.classList.toggle('is-on', !!meta && b.dataset.report === r.status);
+      });
+    }
+    var c = selectedId != null ? communityOf(selectedId) : null;
+    if (el.sheetCommunity) {
+      if (c && c.votes) {
+        el.sheetCommunity.hidden = false;
+        el.sheetCommunity.textContent = '★ ' + String(c.avg).replace('.', ',') + ' · ' + c.votes + ' értékelés';
+      } else {
+        el.sheetCommunity.hidden = true;
+      }
+    }
+  }
+
+  function sendReport(id, status) {
+    if (!REPORTS[status]) return;
+    if (!sb) { toast('A jelentéshez internetkapcsolat kell'); return; }
+    if (!account.user) {
+      authOpen('login');
+      authMessage('A jelentéshez jelentkezz be — így nem lesz belőle spam.', 'info');
+      return;
+    }
+    sb.from('point_reports').delete().eq('user_id', account.user.id).eq('point_id', id)
+      .then(function (res) {
+        if (res.error) throw res.error;
+        return sb.from('point_reports').insert({ point_id: id, user_id: account.user.id, status: status });
+      })
+      .then(function (res) {
+        if (res.error) throw res.error;
+        toast('Köszönjük! A jelzés 2 óráig látszik.');
+        return refreshSocial();
+      })
+      .catch(function (e) { toast('A jelentés nem sikerült: ' + authErr(e)); });
+  }
+
+  /* --- közösségi adatok betöltése --- */
+
+  function fetchAllRows(table, columns, cap) {
+    var out = [], page = 0, size = 1000, max = cap || 5000;
+    function next() {
+      if (page * size >= max) return Promise.resolve(out);
+      return sb.from(table).select(columns).range(page * size, page * size + size - 1)
+        .then(function (res) {
+          if (res.error) throw res.error;
+          var rows = res.data || [];
+          out = out.concat(rows);
+          page++;
+          return rows.length < size ? out : next();
+        });
+    }
+    return next();
+  }
+
+  function refreshSocial() {
+    if (!sb) { renderRecent(); return Promise.resolve(); }
+
+    var since = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    var reportsP = sb.from('point_reports')
+      .select('point_id,status,created_at')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(1000)
+      .then(function (res) {
+        if (res.error) return;
+        social.reports = {};
+        (res.data || []).forEach(function (r) {
+          var at = Date.parse(r.created_at);
+          if (!isFinite(at) || Date.now() - at > REPORT_TTL) return;
+          var cur = social.reports[r.point_id];
+          if (!cur) social.reports[r.point_id] = { status: r.status, at: at, count: 1 };
+          else cur.count++;
+        });
+      })
+      .catch(function () { });
+
+    var ratingsP = fetchAllRows('point_ratings', 'point_id,avg_score,votes')
+      .then(function (rows) {
+        social.remote = {};
+        rows.forEach(function (r) {
+          var avg = parseFloat(r.avg_score);
+          if (isFinite(avg)) social.remote[r.point_id] = { avg: avg, votes: r.votes || 0 };
+        });
+      })
+      .catch(function () { });
+
+    return Promise.all([reportsP, ratingsP]).then(function () {
+      applyFilters();
+      if (selectedId != null) refreshSheetSocial();
+    });
+  }
+
+  /* --- értékelések szinkronja a fiókkal --- */
+
+  function pushLocalRating(id, d) {
+    if (!sb || !account.user) return Promise.resolve();
+    var row = {
+      score: d.score,
+      tags: d.tags || [],
+      note: d.note || '',
+      updated_at: new Date(d.at || Date.now()).toISOString()
+    };
+    return sb.from('ratings').update(row)
+      .eq('user_id', account.user.id).eq('point_id', +id).select('point_id')
+      .then(function (res) {
+        if (res.error) throw res.error;
+        if (res.data && res.data.length) return null;
+        return sb.from('ratings').insert({
+          user_id: account.user.id, point_id: +id,
+          score: row.score, tags: row.tags, note: row.note, updated_at: row.updated_at
+        }).then(function (r2) { if (r2.error) throw r2.error; });
+      });
+  }
+
+  function pullRatings() {
+    if (!sb || !account.user) return Promise.resolve();
+    return sb.from('ratings').select('point_id,score,tags,note,updated_at')
+      .eq('user_id', account.user.id)
+      .then(function (res) {
+        if (res.error || !res.data) return;
+        var store = loadFbStore(), changed = false;
+        res.data.forEach(function (r) {
+          var at = r.updated_at ? Date.parse(r.updated_at) : 0;
+          var cur = store[r.point_id];
+          if (!cur || (at && at > (cur.at || 0))) {
+            store[r.point_id] = { score: r.score, tags: r.tags || [], note: r.note || '', at: at || Date.now() };
+            changed = true;
+          }
+        });
+        if (changed) {
+          saveFbStore(store);
+          applyFilters();
+          if (selectedId != null) loadFbIntoUI(selectedId);
+        }
+      })
+      .catch(function () { });
+  }
+
+  function loadAccountSocial() {
+    if (!sb || !account.user) return;
+    var uid = account.user.id;
+
+    // kedvencek: szerver + helyi összefésülése
+    sb.from('favorites').select('point_id').eq('user_id', uid)
+      .then(function (res) {
+        if (res.error || !res.data) return;
+        var remoteFavs = {};
+        res.data.forEach(function (r) { remoteFavs[r.point_id] = true; });
+        var merged = {};
+        Object.keys(remoteFavs).forEach(function (id) { merged[id] = true; });
+        Object.keys(social.favs).forEach(function (id) { merged[id] = true; });
+        social.favs = merged;
+        writeJSON(FAV_KEY, Object.keys(merged).map(Number));
+        Object.keys(merged).forEach(function (id) {
+          if (remoteFavs[id]) return;
+          sb.from('favorites').insert({ user_id: uid, point_id: +id })
+            .then(function (r) { if (r.error && r.error.code !== '23505') console.warn('[kedvenc]', r.error.message); });
+        });
+        applyFilters();
+      })
+      .catch(function () { });
+
+    // látogatások
+    sb.from('visits').select('point_id,visited_at').eq('user_id', uid)
+      .order('visited_at', { ascending: false }).limit(8)
+      .then(function (res) {
+        if (res.error || !res.data) return;
+        var remoteAt = {};
+        res.data.forEach(function (r) { remoteAt[r.point_id] = Date.parse(r.visited_at) || Date.now(); });
+        var mergedAt = {};
+        Object.keys(remoteAt).forEach(function (id) { mergedAt[id] = remoteAt[id]; });
+        social.visits.forEach(function (v) {
+          if (!mergedAt[v.id] || v.at > mergedAt[v.id]) mergedAt[v.id] = v.at;
+        });
+        social.visits = Object.keys(mergedAt).map(function (id) { return { id: Number(id), at: mergedAt[id] }; })
+          .sort(function (a, b) { return b.at - a.at; }).slice(0, 8);
+        writeJSON(VISIT_KEY, social.visits);
+        renderRecent();
+        social.visits.forEach(function (v) {
+          if (remoteAt[v.id]) return;
+          sb.from('visits').upsert(
+            { user_id: uid, point_id: v.id, visited_at: new Date(v.at).toISOString() },
+            { onConflict: 'user_id,point_id' }
+          ).then(function (r) { if (r.error) console.warn('[látogatás]', r.error.message); });
+        });
+      })
+      .catch(function () { });
+
+    // értékelések: helyi feltöltés, majd szerveroldali egyesítés
+    var store = loadFbStore();
+    var chain = Promise.resolve();
+    Object.keys(store).forEach(function (id) {
+      chain = chain.then(function () { return pushLocalRating(id, store[id]); }).catch(function () { });
+    });
+    chain.then(pullRatings);
+  }
+
+  /* --- legutóbbi látogatás --- */
+
+  function recordVisit(id) {
+    if (id == null) return;
+    var now = Date.now();
+    social.visits = [{ id: id, at: now }]
+      .concat(social.visits.filter(function (v) { return v.id !== id; })).slice(0, 8);
+    writeJSON(VISIT_KEY, social.visits);
+    renderRecent();
+    if (sb && account.user) {
+      sb.from('visits').upsert(
+        { user_id: account.user.id, point_id: id, visited_at: new Date(now).toISOString() },
+        { onConflict: 'user_id,point_id' }
+      ).then(function (r) { if (r.error) console.warn('[látogatás]', r.error.message); });
+    }
+  }
+
+  function renderRecent() {
+    if (!el.recentCard) return;
+    var v = null;
+    for (var i = 0; i < social.visits.length && !v; i++) {
+      if (state.byId.has(social.visits[i].id)) v = social.visits[i];
+    }
+    if (!v) { el.recentCard.hidden = true; return; }
+
+    var p = state.byId.get(v.id);
+    var d = p._d != null ? p._d : (state.me ? dist(state.me.lat, state.me.lng, p.lat, p.lng) : null);
+    var bits = [agoText(v.at)];
+    if (d != null) bits.push(fmtDist(d) + ' tőled');
+    bits.push(p.type === 'automata' ? 'automata' : 'kézi pont');
+
+    el.recentName.textContent = p.name;
+    el.recentMeta.textContent = bits.join(' · ');
+    el.recentCard.hidden = false;
+    el.recentGo.onclick = function () { startRoute(p, null); };
+  }
+
   function initMap() {
     map = new maplibregl.Map({
       container: 'map',
-      style: 'https://tiles.openfreemap.org/styles/dark',
+      style: MAP_STYLE,
       center: [19.4597, 47.1625],
       zoom: 6.9,
       minZoom: 6,
@@ -520,6 +1313,19 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           'circle-color': ['match', ['get', 'type'], 'automata', '#FF7A45', '#22C9EE'],
           'circle-stroke-color': '#050607',
           'circle-stroke-width': 1.6
+        }
+      });
+
+      // friss üzemállapot-jelzés: színes gyűrű a pont körül
+      map.addLayer({
+        id: 'repont-report', type: 'circle', source: 'repont',
+        filter: ['all', ['!', ['has', 'point_count']], ['has', 'report']],
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 7, 11, 10.5, 16, 14],
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-width': 2.2,
+          'circle-stroke-color': ['match', ['get', 'report'],
+            'tele', '#FF4D4D', 'urult', '#2BD97C', 'hibas', '#F16524', '#999999']
         }
       });
 
@@ -718,6 +1524,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         var d = store[p.id];
         var props = { id: p.id, type: p.type, rank: p._rank || 99 };
         if (d && d.score != null) props.score = d.score;   // csak létező pontszám
+        if (social.reports[p.id]) props.report = social.reports[p.id].status;
         return {
           type: 'Feature',
           geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
@@ -795,11 +1602,118 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   var routeAbort = null;
 
+  /* --- útvonal: Valhalla (kerékpár / gyalog) + OSRM (autó) --- */
+
+  // Valhalla polyline6 (1e6 pontosságú) dekódoló
+  function decodePolyline6(str) {
+    var coords = [], index = 0, lat = 0, lng = 0, b, shift, result;
+    while (index < str.length) {
+      shift = 0; result = 0;
+      do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+      shift = 0; result = 0;
+      do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+      coords.push([lng / 1e6, lat / 1e6]);
+    }
+    return coords;
+  }
+
+  function valhallaStepType(t) {
+    if (t === 4 || t === 5 || t === 6) return 'arrive';
+    if (t === 1 || t === 2 || t === 3) return 'depart';
+    if (t === 26 || t === 27) return 'roundabout';
+    if (t === 25) return 'merge';
+    if (t === 7) return 'new name';
+    if (t === 8 || t === 22) return 'continue';
+    return 'turn';
+  }
+
+  function valhallaModifier(t) {
+    if (t === 9) return 'slight right';
+    if (t === 10 || t === 18 || t === 20 || t === 23) return 'right';
+    if (t === 11) return 'sharp right';
+    if (t === 12 || t === 13) return 'uturn';
+    if (t === 14) return 'sharp left';
+    if (t === 15 || t === 19 || t === 21 || t === 24) return 'left';
+    if (t === 16) return 'slight left';
+    return 'straight';
+  }
+
+  // a Valhalla manővereit az app saját (OSRM-szerű) lépésformájára hozzuk
+  function valhallaSteps(leg, coords) {
+    var out = [];
+    (leg.maneuvers || []).forEach(function (m) {
+      var idx = Math.max(0, Math.min(m.begin_shape_index || 0, coords.length - 1));
+      out.push({
+        instruction: '',
+        name: '',
+        distance: (m.length || 0) * 1000,
+        maneuver: {
+          type: valhallaStepType(m.type),
+          modifier: valhallaModifier(m.type),
+          location: [coords[idx][0], coords[idx][1]]
+        }
+      });
+    });
+    return out;
+  }
+
+  function fetchValhallaRoute(me, p, costing, signal) {
+    return fetch(VALHALLA, {
+      method: 'POST',
+      signal: signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        locations: [{ lat: me.lat, lon: me.lng }, { lat: p.lat, lon: p.lng }],
+        costing: costing,
+        directions_options: { units: 'kilometers', language: 'hu-HU' }
+      })
+    })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) {
+        var trip = j && j.trip;
+        var leg = trip && trip.legs && trip.legs[0];
+        if (!leg || !leg.shape) throw new Error('nincs útvonal');
+        var coords = decodePolyline6(leg.shape);
+        if (coords.length < 2) throw new Error('nincs útvonal');
+        var sum = trip.summary || leg.summary || {};
+        return {
+          distance: sum.length ? sum.length * 1000 : 0,
+          duration: sum.time || 0,
+          steps: valhallaSteps(leg, coords),
+          geometry: { type: 'LineString', coordinates: coords }
+        };
+      });
+  }
+
+  // egységes útvonal-kérés: autó → OSRM, kerékpár/gyalog → Valhalla
+  function requestRoute(me, p, mode, signal) {
+    if (mode === 'cycling' || mode === 'foot') {
+      return fetchValhallaRoute(me, p, mode === 'cycling' ? 'bicycle' : 'pedestrian', signal);
+    }
+    var url = OSRM + 'driving/' + me.lng + ',' + me.lat + ';' + p.lng + ',' + p.lat +
+      '?overview=full&geometries=geojson&steps=true&annotations=false';
+    return fetch(url, { signal: signal })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) {
+        if (!j.routes || !j.routes.length) throw new Error('nincs útvonal');
+        var rt = j.routes[0];
+        var leg = rt.legs && rt.legs[0];
+        return {
+          distance: rt.distance,
+          duration: rt.duration,
+          steps: (leg && leg.steps) || null,
+          geometry: rt.geometry
+        };
+      });
+  }
+
   function startRoute(p, mode, opts) {
     mode = mode || (state.route && state.route.point === p ? state.route.mode : 'driving');
 
     if (!state.me) {
-      askLocation({ route: p.id, navigate: !!(opts && opts.navigate) });
+      askLocation({ route: p.id, navigate: !!(opts && opts.navigate), mode: mode });
       return;
     }
 
@@ -807,8 +1721,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     routeAbort = new AbortController();
 
     var me = state.me;
-    var url = OSRM + mode + '/' + me.lng + ',' + me.lat + ';' + p.lng + ',' + p.lat +
-      '?overview=full&geometries=geojson&steps=true&annotations=false';
+    var routeReq = requestRoute(me, p, mode, routeAbort.signal);
 
     el.routeCard.hidden = false;
     el.routeName.textContent = p.name;
@@ -828,15 +1741,11 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     closePopup();
     if (!isMobile()) openPopupFor(p);
 
-    fetch(url, { signal: routeAbort.signal })
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (j) {
-        if (!j.routes || !j.routes.length) throw new Error('nincs útvonal');
-        var rt = j.routes[0];
-        var leg = rt.legs && rt.legs[0];
+    routeReq
+      .then(function (rt) {
         state.route.dist = rt.distance;
         state.route.dur = rt.duration;
-        state.route.steps = (leg && leg.steps) || null;
+        state.route.steps = rt.steps || null;
         state.route.geojson = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: rt.geometry, properties: {} }] };
 
         drawRouteLayer(state.route.geojson);
@@ -977,6 +1886,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.navView.hidden = false;
     el.navNext.hidden = true;
     document.body.classList.add('is-nav');
+    recordVisit(state.route && state.route.point ? state.route.point.id : null);
     startWatch();
     if (state.me) navUpdate(state.me);
     else toast('Kövesd a nyilakat — a helyzeted frissítése folyamatban');
@@ -1124,6 +2034,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         if (st !== 'open' && st !== 'soon') return false;
       }
       if (state.filter === 'rated' && !store[p.id]) return false;
+      if (state.filter === 'fav' && !isFav(p.id)) return false;
       for (var i = 0; i < terms.length; i++) {
         if (p._hay.indexOf(terms[i]) === -1) return false;
       }
@@ -1136,8 +2047,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     if (state.sort === 'rating') {
       list.sort(function (a, b) {
-        var ra = store[a.id] ? store[a.id].score : -1;
-        var rb = store[b.id] ? store[b.id].score : -1;
+        var ka = communityOf(a.id), kb = communityOf(b.id);
+        var ra = store[a.id] ? store[a.id].score : (ka ? ka.avg : -1);
+        var rb = store[b.id] ? store[b.id].score : (kb ? kb.avg : -1);
         if (rb !== ra) return rb - ra;
         return (a._d || 1e12) - (b._d || 1e12);
       });
@@ -1164,6 +2076,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     else if (state.filter === 'automata') el.resultsLabel.textContent = 'Automaták';
     else if (state.filter === 'kezi') el.resultsLabel.textContent = 'Kézi pontok';
     else if (state.filter === 'rated') el.resultsLabel.textContent = 'Értékelt pontok';
+    else if (state.filter === 'fav') el.resultsLabel.textContent = 'Kedvencek';
     else el.resultsLabel.textContent = state.me ? 'Legközelebbi pontok' : 'Minden pont';
 
     var top = state.filtered.slice(0, 80);
@@ -1171,7 +2084,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       el.results.innerHTML = '<div class="empty">' +
         (state.filter === 'rated'
           ? 'Még nem értékeltél egy pontot sem.<br>Nyiss meg egy REpontot, és osztályozd 1–10-ig.'
-          : 'Nincs ilyen találat.<br>Próbálj másik települést vagy címet.') +
+          : (state.filter === 'fav'
+            ? 'Még nincs kedvenc pontod.<br>Koppints a kártyán a ★ jelre, és itt megtalálod.'
+            : 'Nincs ilyen találat.<br>Próbálj másik települést vagy címet.')) +
         '</div>';
     } else {
       el.results.innerHTML = top.map(function (p, i) { return cardHtml(p, now, i, store[p.id]); }).join('') +
@@ -1203,12 +2118,15 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           '<span class="tag ' + p.type + '">' + (p.type === 'automata' ? 'Automata' : 'Kézi') + '</span>' +
           (rating
             ? '<span class="score ' + scoreClass(sc) + ' score-xs">' + sc + '</span>'
-            : '') +
+            : communityBadgeHtml(p.id)) +
+          reportChipHtml(p.id) +
         '</span>' +
       '</span>' +
       (p._d != null
         ? '<span class="card-dist">' + fmtDist(p._d) + '<small>tőled</small></span>'
         : '') +
+      '<span class="card-fav' + (isFav(p.id) ? ' is-on' : '') + '" role="button" tabindex="0" data-fav="' + p.id +
+        '" aria-label="' + (isFav(p.id) ? 'Eltávolítás a kedvencekből' : 'Hozzáadás a kedvencekhez') + '">★</span>' +
       '<span class="card-route">ÚTVONAL →</span>' +
     '</button>';
   }
@@ -1269,20 +2187,26 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.sheetType.className = 'sheet-type ' + p.type;
     el.sheetName.textContent = p.name;
     el.sheetAddr.textContent = addrText(p) + (p.zip && addrText(p).indexOf(p.zip) === -1 ? ' · ' + p.zip : '');
-    el.sheetStatus.innerHTML = bigPill(st);
     el.sheetDist.textContent = p._d != null ? fmtDist(p._d) + ' tőled' : '';
+    refreshSheetFav();
+    refreshSheetSocial();
     refreshSheetRate();
 
     var hrs = hoursOf(p);
+    var today = now.getDay();
+    paintSheetStatus(st, hrs, today, now);
+
     var order = [1, 2, 3, 4, 5, 6, 0];
     var names = { 1: 'Hétfő', 2: 'Kedd', 3: 'Szerda', 4: 'Csütörtök', 5: 'Péntek', 6: 'Szombat', 0: 'Vasárnap' };
-    var today = now.getDay();
     el.sheetHours.innerHTML = order.map(function (d) {
-      var r = !hrs ? null : (d === 0 ? hrs.v : (d === 6 ? hrs.s : hrs.h));
+      var r = dayRange(hrs, d);
       var txt = r ? esc(r.text) : 'Zárva';
       return '<tr' + (d === today ? ' class="is-today"' : '') + '><th>' + names[d] + '</th>' +
         '<td' + (r ? '' : ' class="closed"') + '>' + txt + '</td></tr>';
     }).join('');
+    el.hoursBlock.classList.remove('is-open');
+    el.hoursToggle.setAttribute('aria-expanded', 'false');
+    el.hoursToggle.textContent = 'Teljes nyitvatartás';
 
     var ll = p.lat + ',' + p.lng;
     el.navGoogle.href = NAV_GOOGLE + ll;
@@ -1302,6 +2226,60 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     el.sheet.hidden = false;
     el.sheetScrim.hidden = false;
+    paintSheetMiniMap(p);
+  }
+
+  // nagy státuszsor: „Ma 9:00 - 20:00” + állapot + vékony lime sáv
+  function paintSheetStatus(st, hrs, day, now) {
+    var mins = now.getHours() * 60 + now.getMinutes();
+    var r = dayRange(hrs, day);
+    var txt, sub, fill = 0;
+
+    if (r) {
+      txt = 'Ma ' + r.text;
+      if (st === 'open' || st === 'soon') {
+        var left = leftText(r.close - mins);
+        sub = st === 'soon' ? ('Hamarosan zár · ' + left + ' van hátra') : ('Nyitva · ' + left + ' múlva zár');
+        fill = Math.max(3, Math.min(100, ((r.close - mins) / Math.max(1, r.close - r.open)) * 100));
+      } else {
+        sub = 'Zárva most';
+        var nx = nextOpenText(hrs, day, mins);
+        if (nx) sub += ' · ' + nx;
+      }
+    } else if (hrs) {
+      txt = 'Ma zárva';
+      sub = nextOpenText(hrs, day, mins) || 'Ma már nem nyit ki';
+    } else {
+      txt = 'Nincs adat';
+      sub = 'Erre a pontra nincs nyitvatartás megadva';
+    }
+
+    el.sheetStatusBox.className = 'sheet-status ' +
+      (st === 'open' ? 'is-open' : (st === 'soon' ? 'is-soon' : (st === 'closed' ? 'is-closed' : 'is-unknown')));
+    el.sheetStatusText.textContent = txt;
+    el.sheetStatusSub.textContent = sub;
+    el.sheetStatusBar.style.setProperty('--fill', Math.round(fill) + '%');
+  }
+
+  // mini térkép-előnézet a lapka fejlécében (egyszer jön létre, utána csak ugrik)
+  var miniMap = null;
+
+  function paintSheetMiniMap(p) {
+    if (!el.sheetMini || typeof maplibregl.Map !== 'function') return;
+    if (!miniMap) {
+      miniMap = new maplibregl.Map({
+        container: el.sheetMini,
+        style: MAP_STYLE,
+        center: [p.lng, p.lat],
+        zoom: 16.2,
+        interactive: false,
+        attributionControl: false,
+        renderWorldCopies: false
+      });
+    } else {
+      miniMap.jumpTo({ center: [p.lng, p.lat], zoom: 16.2 });
+    }
+    setTimeout(function () { if (miniMap) miniMap.resize(); }, 90);
   }
 
   function closeSheet() {
@@ -1312,6 +2290,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   /* ==================== ranglista / profil ==================== */
 
   function openOverlay(kind) {
+    overlayKind = kind;
     var store = loadFbStore();
     var ids = Object.keys(store);
 
@@ -1380,11 +2359,24 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       }
     }
 
+    if (kind === 'profile') {
+      var headWrap = document.createElement('div');
+      headWrap.innerHTML = accountHeadHtml();
+      el.overlayBody.insertBefore(headWrap.firstChild, el.overlayBody.firstChild);
+      var actWrap = document.createElement('div');
+      actWrap.innerHTML = accountActionsHtml();
+      while (actWrap.firstChild) el.overlayBody.appendChild(actWrap.firstChild);
+    }
+
     el.overlay.hidden = false;
     document.body.classList.add('is-page');
   }
 
-  function closeOverlay() { el.overlay.hidden = true; document.body.classList.remove('is-page'); }
+  function closeOverlay() {
+    overlayKind = null;
+    el.overlay.hidden = true;
+    document.body.classList.remove('is-page');
+  }
 
   /* ==================== geolokáció ==================== */
 
@@ -1396,7 +2388,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       return;
     }
     var why = 'locate';
-    if (req && req.route != null) { pendingRoute = { id: req.route, navigate: !!req.navigate }; why = 'route'; }
+    if (req && req.route != null) { pendingRoute = { id: req.route, navigate: !!req.navigate, mode: req.mode || null }; why = 'route'; }
     else if (req && req.sos) why = 'sos';
 
     el.locateBtn.disabled = true;
@@ -1435,7 +2427,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         var pr = pendingRoute;
         pendingRoute = null;
         var p = pr ? state.byId.get(pr.id) : null;
-        if (p) { startRoute(p, null, { navigate: pr.navigate }); return; }
+        if (p) { startRoute(p, pr.mode || null, { navigate: pr.navigate }); return; }
       }
 
       applyFilters();
@@ -1585,11 +2577,14 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         state.byId.set(p.id, p);
       });
       ready.data = true;
+      renderRecent();
+      refreshSocial();
       maybeHideLoader();
       applyFilters();
       loadMeta();
       var pos = positionFromHash();
       if (pos) setMe(pos.lat, pos.lng, null);
+      setTimeout(maybeIntro, 700);
     } catch (e) {
       var p = el.loader.querySelector('p');
       if (p) p.innerHTML = 'Nem sikerült betölteni az adatokat.<br>Generáld le: <b>node tools/fetch-data.mjs</b>';
@@ -1645,6 +2640,22 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     ['dockTop', 'dockMap', 'dockProfile', 'dockSearch'].forEach(function (id) {
       if (el[id]) el[id].classList.toggle('is-active', id === activeId);
     });
+    syncDockPill();
+  }
+
+  // a kiválasztott fül "folyékony" pirulája a gomb valódi helyére/méretére csúszik
+  function syncDockPill() {
+    if (!el.dock) return;
+    var active = null;
+    ['dockTop', 'dockMap', 'dockProfile', 'dockSearch'].forEach(function (id) {
+      if (el[id] && el[id].classList.contains('is-active')) active = el[id];
+    });
+    if (!active || !active.offsetWidth) {
+      el.dock.style.setProperty('--pill-w', '0px');
+      return;
+    }
+    el.dock.style.setProperty('--pill-x', active.offsetLeft + 'px');
+    el.dock.style.setProperty('--pill-w', active.offsetWidth + 'px');
   }
 
   /* ==================== események ==================== */
@@ -1741,6 +2752,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     });
 
     el.results.addEventListener('click', function (e) {
+      var favEl = e.target.closest('[data-fav]');
+      if (favEl) { e.stopPropagation(); toggleFav(+favEl.dataset.fav); return; }
       var card = e.target.closest('.card');
       if (!card) return;
       var id = +card.dataset.id;
@@ -1838,9 +2851,50 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       el.searchInput.select();
     });
 
+    // Fiók / bejelentkezés
+    el.authClose.addEventListener('click', authClose);
+    el.authView.addEventListener('click', function (e) {
+      if (e.target === el.authView) authClose();
+    });
+    el.authTabs.addEventListener('click', function (e) {
+      var t = e.target.closest('[data-tab]');
+      if (!t) return;
+      authSetMode(t.dataset.tab);
+    });
+    el.authForgot.addEventListener('click', function () { authSetMode('forgot'); el.authEmail.focus(); });
+    el.authBack.addEventListener('click', function () { authSetMode('login'); el.authEmail.focus(); });
+    el.authForm.addEventListener('submit', function (e) { e.preventDefault(); authSubmit(); });
+
+    // Közösségi állapot / kedvencek
+    el.results.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var favEl = e.target.closest('[data-fav]');
+      if (!favEl) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFav(+favEl.dataset.fav);
+    });
+    el.sheetFav.addEventListener('click', function () {
+      if (selectedId != null) toggleFav(selectedId);
+    });
+    el.reportBtns.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-report]');
+      if (!b || selectedId == null) return;
+      sendReport(selectedId, b.dataset.report);
+    });
+
     // Overlay
     el.overlayClose.addEventListener('click', function () { closeOverlay(); setDock('dockMap'); });
     el.overlay.addEventListener('click', function (e) {
+      var accBtn = e.target.closest('[data-account]');
+      if (accBtn) {
+        var act = accBtn.dataset.account;
+        if (act === 'login' || act === 'register') { authOpen(act); return; }
+        if (act === 'password') { authOpen('reset'); return; }
+        if (act === 'intro') { closeOverlay(); setDock('dockMap'); setTimeout(introShow, 160); return; }
+        if (act === 'logout') { authSignOut(); return; }
+        if (act === 'delete') { authDeleteAccount(); return; }
+      }
       if (e.target === el.overlay) { closeOverlay(); setDock('dockMap'); return; }
       var row = e.target.closest('.rank-row');
       if (row) {
@@ -1850,11 +2904,42 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       }
     });
 
+    if (el.hoursToggle) {
+      el.hoursToggle.addEventListener('click', function () {
+        var open = el.hoursBlock.classList.toggle('is-open');
+        el.hoursToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        el.hoursToggle.textContent = open ? 'Csak a mai nap' : 'Teljes nyitvatartás';
+      });
+    }
+
+    if (el.introView) {
+      el.introClose.addEventListener('click', introHide);
+      el.introNext.addEventListener('click', function () { introSlide(introIndex + 1); });
+      el.introSlides.addEventListener('click', function () { introSlide(introIndex + 1); });
+      el.introDots.addEventListener('click', function (e) {
+        var d = e.target.closest('[data-slide]');
+        if (d) introSlide(+d.dataset.slide);
+      });
+      el.introRegister.addEventListener('click', function () { introStart('register'); });
+      el.introLogin.addEventListener('click', function () { introStart('login'); });
+      el.introGuest.addEventListener('click', introHide);
+      el.introView.addEventListener('click', function (e) {
+        if (e.target === el.introView) introHide();
+      });
+    }
+
     el.sheetClose.addEventListener('click', closeSheet);
     el.sheetScrim.addEventListener('click', closeSheet);
 
     document.addEventListener('keydown', function (e) {
+      if (el.introView && !el.introView.hidden) {
+        if (e.key === 'ArrowLeft') { introSlide(introIndex - 1); return; }
+        if (e.key === 'ArrowRight') { introSlide(introIndex + 1); return; }
+        if (e.key === 'Escape') { introHide(); return; }
+        return;
+      }
       if (e.key !== 'Escape') return;
+      if (!el.authView.hidden) { authClose(); return; }
       if (!el.overlay.hidden) { closeOverlay(); setDock('dockMap'); return; }
       if (!el.arrive.hidden) { el.arrive.hidden = true; stopNavigation(); return; }
       if (!el.sosView.hidden) { stopSos(); return; }
@@ -1875,6 +2960,19 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   window.__vissza = {
     navStart: function () { startNavigation(); },
     navStop: stopNavigation,
+    intro: function (on) { if (on === false) introHide(); else introShow(); },
+    sheetMap: function () {
+      if (!miniMap) return null;
+      var c = miniMap.getCanvas();
+      return {
+        zoom: miniMap.getZoom(),
+        center: miniMap.getCenter(),
+        styleLoaded: miniMap.isStyleLoaded(),
+        loaded: miniMap.loaded(),
+        tiles: miniMap.areTilesLoaded(),
+        size: c.width + 'x' + c.height
+      };
+    },
     navSim: navSimulate,
     navState: function () {
       return nav ? { stepIdx: nav.stepIdx, total: nav.total, simPos: nav.simPos, arrived: nav.arrived } : null;
@@ -1894,8 +2992,17 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'navExit', 'navPreview', 'navNext',
      'arrive', 'arriveName', 'arriveOk',
      'overlay', 'overlayClose', 'overlayEyebrow', 'overlayTitle', 'overlayBody',
+     'authView', 'authClose', 'authEyebrow', 'authTitle', 'authSub', 'authTabs',
+     'authTabLogin', 'authTabRegister', 'authForm', 'authEmailField', 'authEmail',
+     'authNameField', 'authName', 'authPasswordField', 'authPassword',
+     'authPassword2Field', 'authPassword2', 'authMsg', 'authSubmit', 'authForgot', 'authBack',
+     'introView', 'introClose', 'introSlides', 'introDots', 'introNext', 'introRegister', 'introLogin', 'introGuest',
+     'recentCard', 'recentName', 'recentMeta', 'recentGo',
+     'sheetFav', 'sheetCommunity', 'reportBtns', 'reportStatus',
      'sheet', 'sheetScrim', 'sheetType',
-     'sheetName', 'sheetAddr', 'sheetStatus', 'sheetDist', 'sheetRate', 'sheetHours',
+     'sheetName', 'sheetAddr', 'sheetDist', 'sheetRate', 'sheetHours', 'sheetMini',
+     'sheetStatusBox', 'sheetStatusText', 'sheetStatusSub', 'sheetStatusBar',
+     'hoursBlock', 'hoursToggle',
      'sheetClose', 'sheetRoute', 'navGoogle', 'navWaze', 'navApple', 'copyAddr',
      'toast', 'loader', 'statAll', 'statAuto', 'statKezi', 'toolFilter', 'toolLocate',
      'routeCard', 'routeClose', 'routeModes', 'routeDist', 'routeTime', 'routeName',
@@ -1905,8 +3012,11 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     initMap();
     initFeedbackUI();
+    initAuth();
+    initSocial();
     placeDock();
-    window.addEventListener('resize', debounce(placeDock, 120));
+    syncDockPill();
+    window.addEventListener('resize', debounce(function () { placeDock(); syncDockPill(); }, 120));
     bindEvents();
     loadData();
   }
