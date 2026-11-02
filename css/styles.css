@@ -3641,3 +3641,131 @@ body.is-nav .stage > .dock { display: none; }
   .share-qr { align-self: center; }
   .chat-msgs { max-height: 52vh; }
 }
+
+/* ===================== Visszaváltás-napló / kassza ===================== */
+
+.cash-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.cash-stat {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: rgba(255, 255, 255, .04);
+}
+.cash-stat b {
+  display: block;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cash-stat.is-money b { color: var(--lime); }
+.cash-stat span { display: block; font-size: 10.5px; color: var(--ink-3); margin-top: 3px; }
+
+.cash-chart {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  height: 118px;
+  margin: 16px 0 14px;
+}
+.cash-bar {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.cash-bar-val {
+  height: 15px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+}
+.cash-bar-track {
+  flex: 1 1 auto;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.cash-bar-track i {
+  display: block;
+  width: 100%;
+  max-width: 30px;
+  min-height: 0;
+  border-radius: 7px 7px 3px 3px;
+  background: rgba(255, 255, 255, .16);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-bottom: 0;
+  transition: height .4s ease;
+}
+.cash-bar.is-now .cash-bar-track i {
+  background: linear-gradient(180deg, rgba(216, 224, 47, .92), rgba(216, 224, 47, .4));
+  border-color: rgba(216, 224, 47, .6);
+}
+.cash-bar.is-now .cash-bar-lbl { color: var(--lime); }
+.cash-bar-lbl {
+  height: 14px;
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.cash-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.cash-form input {
+  height: 38px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .05);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  color-scheme: dark;
+}
+.cash-form input:focus { outline: none; border-color: rgba(216, 224, 47, .55); }
+.cash-form input::placeholder { color: var(--ink-3); }
+.cash-form input[type="date"] { flex: 1 1 140px; }
+.cash-form input[name="bottles"] { flex: 1 1 106px; }
+.cash-form input[name="kaucio"] { flex: 1 1 106px; }
+.cash-form input[type="number"]::-webkit-outer-spin-button,
+.cash-form input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.cash-form input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.cash-form .btn { height: 38px; padding: 0 16px; }
+
+.cash-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+.cash-row .rank-main b {
+  font-family: var(--display);
+  font-size: 14.5px;
+  color: var(--lime);
+}
+.cash-row .p-ico-btn { margin-left: auto; flex: none; }
+
+@media (max-width: 420px) {
+  .cash-form input[type="date"] { flex: 1 1 100%; }
+}

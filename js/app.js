@@ -1498,6 +1498,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     // jelvények
     out.push(profSection('Jelvények', badges.map(badgeHtml).join('')));
 
+    // visszaváltás-napló + kassza (50 Ft/db + kaució, havi grafikon)
+    out.push(profSection('Visszaváltás-napló', cashSectionHtml()));
+
     // látogatások
     if (visits.length) {
       out.push(profSection('Látogatások', visits.map(function (v) {
@@ -3901,6 +3904,19 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       }
     });
 
+    // Visszaváltás-napló (kassza) a profilban
+    el.overlay.addEventListener('submit', function (e) {
+      var f = e.target;
+      if (!f || !f.dataset || f.dataset.cash !== 'add') return;
+      e.preventDefault();
+      cashAddFromForm(f);
+    });
+    el.overlay.addEventListener('click', function (e) {
+      var d = e.target.closest('[data-cashdel]');
+      if (!d) return;
+      cashRemove(d.dataset.cashdel);
+    });
+
     // Fiók / bejelentkezés
     el.authClose.addEventListener('click', authClose);
     el.authView.addEventListener('click', function (e) {
@@ -4801,6 +4817,187 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     }
     if (act === 'cancelpending') { soc.pendingPoint = null; renderFriendsView(); return; }
     if (act === 'link') { closeOverlay(); setDock('dockMap'); return; }
+  }
+
+  /* ==================== visszaváltás-napló + kassza ==================== */
+
+  var CASH_KEY = 'vissza.cash.v1';
+  var CASH_PRICE = 50;                 // Ft / palack visszaváltási érték
+  var CASH_MONTHS = ['jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.',
+                     'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.'];
+
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+      '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function cashList() {
+    if (!Array.isArray(state.cash)) {
+      var v = readJSON(CASH_KEY, []);
+      state.cash = Array.isArray(v)
+        ? v.filter(function (e) { return e && e.at && e.bottles != null; })
+        : [];
+    }
+    return state.cash;
+  }
+
+  function cashSave(list) {
+    state.cash = list;
+    writeJSON(CASH_KEY, list);
+  }
+
+  function fmtFt(n) {
+    return Math.round(+n || 0).toLocaleString('hu-HU') + ' Ft';
+  }
+
+  function cashMonthKey(at) { return String(at || '').slice(0, 7); }   // 'ÉÉÉÉ-HH'
+
+  function cashMonthTitle(key) {
+    var p = String(key || '').split('-');
+    var y = +p[0], m = +p[1];
+    if (!y || !m || m < 1 || m > 12) return key || '';
+    return CASH_MONTHS[m - 1] + ' ' + y;
+  }
+
+  function cashFt(entry) {
+    return (+entry.bottles || 0) * CASH_PRICE + (+entry.kaucio || 0);
+  }
+
+  function cashTotals(list) {
+    var now = todayStr().slice(0, 7);
+    var t = { bottles: 0, ft: 0, monthBottles: 0, monthFt: 0, count: list.length };
+    list.forEach(function (e) {
+      var b = +e.bottles || 0;
+      t.bottles += b;
+      t.ft += cashFt(e);
+      if (cashMonthKey(e.at) === now) {
+        t.monthBottles += b;
+        t.monthFt += cashFt(e);
+      }
+    });
+    return t;
+  }
+
+  // utolsó 6 hónap oszlopdiagramja (HTML/CSS, könyvtár nélkül)
+  function cashChartHtml(list) {
+    var now = new Date();
+    var months = [];
+    for (var i = 5; i >= 0; i--) {
+      var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        key: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'),
+        ft: 0, bottles: 0
+      });
+    }
+    var idx = {};
+    months.forEach(function (m, i) { idx[m.key] = i; });
+    list.forEach(function (e) {
+      var i = idx[cashMonthKey(e.at)];
+      if (i == null) return;
+      months[i].ft += cashFt(e);
+      months[i].bottles += (+e.bottles || 0);
+    });
+
+    var max = 1;
+    months.forEach(function (m) { if (m.ft > max) max = m.ft; });
+
+    return '<div class="cash-chart" role="img" aria-label="Havi visszaváltás az utolsó hat hónapban">' +
+      months.map(function (m, i) {
+        var pct = m.ft ? Math.max(8, Math.round((m.ft / max) * 100)) : 0;
+        var isNow = i === months.length - 1;
+        var lbl = CASH_MONTHS[+m.key.slice(5, 7) - 1];
+        return '<div class="cash-bar' + (isNow ? ' is-now' : '') + '" ' +
+          'title="' + esc(cashMonthTitle(m.key)) + ': ' + esc(fmtFt(m.ft)) + ' · ' + m.bottles + ' palack">' +
+          '<span class="cash-bar-val">' + (m.ft ? esc(fmtFt(m.ft)) : '') + '</span>' +
+          '<span class="cash-bar-track"><i style="height:' + pct + '%"></i></span>' +
+          '<span class="cash-bar-lbl">' + esc(lbl) + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  function cashDateText(at) {
+    var t = Date.parse(String(at) + 'T00:00:00');
+    if (!isFinite(t)) return String(at || '');
+    return new Date(t).toLocaleDateString('hu-HU', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  function cashRowHtml(e) {
+    var b = +e.bottles || 0;
+    var k = +e.kaucio || 0;
+    return '<div class="cash-row">' +
+      '<span class="p-ico" aria-hidden="true">🍾</span>' +
+      '<span class="rank-main"><b>' + esc(fmtFt(cashFt(e))) + '</b>' +
+      '<small>' + esc(cashDateText(e.at)) + ' · ' + b + ' palack' +
+      (k ? ' + ' + esc(fmtFt(k)) + ' kaució' : '') + '</small></span>' +
+      '<button class="p-ico-btn" type="button" data-cashdel="' + esc(String(e.id)) + '" ' +
+      'title="Törlés" aria-label="Bejegyzés törlése">🗑</button>' +
+    '</div>';
+  }
+
+  function cashSectionHtml() {
+    var list = cashList().slice().sort(function (a, b) {
+      if (a.at === b.at) return 0;
+      return a.at < b.at ? 1 : -1;
+    });
+    var t = cashTotals(list);
+
+    var out = '<div class="cash-stats">' +
+      '<div class="cash-stat"><b>' + t.bottles.toLocaleString('hu-HU') + '</b><span>palack összesen</span></div>' +
+      '<div class="cash-stat is-money"><b>' + esc(fmtFt(t.ft)) + '</b><span>bevétel összesen</span></div>' +
+      '<div class="cash-stat"><b>' + t.monthBottles.toLocaleString('hu-HU') + '</b><span>palack e hónapban</span></div>' +
+      '<div class="cash-stat is-money"><b>' + esc(fmtFt(t.monthFt)) + '</b><span>bevétel e hónapban</span></div>' +
+    '</div>';
+
+    out += cashChartHtml(list);
+
+    out += '<form class="cash-form" data-cash="add">' +
+      '<input type="date" name="date" value="' + esc(todayStr()) + '" aria-label="Dátum" required>' +
+      '<input type="number" name="bottles" min="1" max="99999" inputmode="numeric" ' +
+      'placeholder="Palack (db)" aria-label="Palackok száma" required>' +
+      '<input type="number" name="kaucio" min="0" step="10" inputmode="numeric" ' +
+      'placeholder="Kaució (Ft)" aria-label="Kaució forintban">' +
+      '<button class="btn btn-primary" type="submit">Hozzáadás</button>' +
+    '</form>';
+
+    out += list.length
+      ? list.map(cashRowHtml).join('')
+      : '<div class="chat-hint">Még nincs bejegyzésed. Add meg, hány palackot váltottál vissza — a ' +
+        CASH_PRICE + ' Ft/db és a kaució alapján számoljuk a kasszát.</div>';
+
+    return out;
+  }
+
+  function cashAddFromForm(form) {
+    var date = (form.querySelector('[name="date"]') || {}).value || todayStr();
+    var bottles = parseInt((form.querySelector('[name="bottles"]') || {}).value, 10);
+    var kaucioRaw = (form.querySelector('[name="kaucio"]') || {}).value;
+    var kaucio = kaucioRaw === '' || kaucioRaw == null ? 0 : parseInt(kaucioRaw, 10);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast('Adj meg egy dátumot'); return; }
+    if (!isFinite(bottles) || bottles < 1) { toast('Adj meg hány palackot váltottál vissza'); return; }
+    if (!isFinite(kaucio) || kaucio < 0) { toast('A kaució nem lehet negatív'); return; }
+
+    var list = cashList().slice();
+    list.push({
+      id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      at: date,
+      bottles: Math.min(bottles, 99999),
+      kaucio: Math.min(kaucio, 10000000)
+    });
+    cashSave(list);
+
+    if (overlayKind === 'profile') openOverlay('profile');
+    toast('Rögzítve: ' + bottles + ' palack · ' + fmtFt(bottles * CASH_PRICE + kaucio));
+  }
+
+  function cashRemove(id) {
+    var list = cashList().filter(function (e) { return String(e.id) !== String(id); });
+    if (list.length === cashList().length) return;
+    cashSave(list);
+    if (overlayKind === 'profile') openOverlay('profile');
+    toast('Bejegyzés törölve');
   }
 
   /* ==================== indítás ==================== */

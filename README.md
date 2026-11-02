@@ -101,6 +101,10 @@ A **Profil** fül nem csak a számokat mutatja:
   folyamatosan látogatásod vagy értékelésed).
 * **Jelvények** – „Első visszaváltás", „10 értékelt pont", „5 megye" (irányítószámból számolva),
   „Éjszakai bagoly" (éjfél után mentett értékelés) és „Segítő" (5 üzemállapot-jelzés).
+* **Visszaváltás-napló + kassza** – dátum, palackdarabszám és kaució rögzítése; a kassza
+  50 Ft/db + kaució alapján számol (összesen és e hónapban), alatta **havi oszlopdiagram**
+  az utolsó hat hónapról, a sorok ✗-szel törölhetők. Az eszközön (`localStorage`) tárolódik,
+  bejelentkezés nélkül is működik.
 * **Látogatások** – a legutóbbi 8 látogatás dátummal; koppintásra a térképen nyílik meg a pont.
 * **Kedvenceid** – „Útvonal" gombbal egyből indul az útvonaltervezés.
 * **Értékeléseid** – pontszám, címkék, dátum, és szerkesztés (✎) / törlés (🗑) innen is.
