@@ -3769,3 +3769,256 @@ body.is-nav .stage > .dock { display: none; }
 @media (max-width: 420px) {
   .cash-form input[type="date"] { flex: 1 1 100%; }
 }
+
+/* ===================== Nagy skálázás (szám + gyűrűk + gradient sáv) ===================== */
+
+.fb-scale {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 0 2px;
+  margin-bottom: 18px;
+}
+
+.fb-rings {
+  position: absolute;
+  top: 78px;
+  left: 50%;
+  width: 236px;
+  height: 236px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(216, 224, 47, .13) 0%, rgba(216, 224, 47, .05) 45%, transparent 70%);
+  box-shadow: 0 0 90px rgba(216, 224, 47, .12);
+}
+.fb-rings::before,
+.fb-rings::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(216, 224, 47, .22);
+}
+.fb-rings::before { inset: 0; }
+.fb-rings::after { inset: 15%; border-color: rgba(216, 224, 47, .32); }
+
+.fb-big {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  line-height: 1;
+}
+.fb-big b {
+  font-family: var(--display);
+  font-size: clamp(58px, 15vw, 78px);
+  font-weight: 700;
+  letter-spacing: -3px;
+  color: var(--lime);
+  text-shadow: 0 0 36px rgba(216, 224, 47, .45);
+  transition: color .18s ease, text-shadow .18s ease;
+}
+.fb-scale.is-empty .fb-big b { color: rgba(255, 255, 255, .26); text-shadow: none; }
+.fb-big span {
+  font-family: var(--display);
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.fb-verdict {
+  position: relative;
+  margin-top: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+  color: var(--lime);
+  text-align: center;
+  min-height: 15px;
+}
+.fb-scale.is-empty .fb-verdict {
+  color: var(--ink-3);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: none;
+}
+
+.fb-track { position: relative; width: 100%; margin-top: 22px; }
+.fb-track input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 26px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.fb-track input[type="range"]:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
+.fb-track input[type="range"]::-webkit-slider-runnable-track {
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: linear-gradient(90deg, #FF4B3E 0%, #FF8A1F 34%, #FFD93B 63%, #D8E02F 100%);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .55), 0 0 24px rgba(216, 224, 47, .22);
+}
+.fb-track input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .88);
+  background: radial-gradient(circle at 50% 40%, #0A0B03 0 40%, #D8E02F 44% 100%);
+  box-shadow: 0 0 0 4px rgba(216, 224, 47, .26), 0 0 24px rgba(216, 224, 47, .9);
+}
+
+.fb-track input[type="range"]::-moz-range-track {
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: linear-gradient(90deg, #FF4B3E 0%, #FF8A1F 34%, #FFD93B 63%, #D8E02F 100%);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .55), 0 0 24px rgba(216, 224, 47, .22);
+}
+.fb-track input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .88);
+  background: radial-gradient(circle at 50% 40%, #0A0B03 0 40%, #D8E02F 44% 100%);
+  box-shadow: 0 0 0 4px rgba(216, 224, 47, .26), 0 0 24px rgba(216, 224, 47, .9);
+}
+
+.fb-scale.is-empty .fb-track { opacity: .6; }
+
+.fb-marks {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 4px;
+  font-family: var(--display);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+/* a régi 10 gomb rejtve marad (a JS továbbra is kezeli) */
+.fb-scores { display: none; }
+
+/* ===================== iOS 27 / Liquid Glass ===================== */
+
+:root {
+  --glass-brd: rgba(255, 255, 255, .14);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 -1px 0 rgba(255, 255, 255, .05);
+  --glass-sheen: linear-gradient(150deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .035) 48%, rgba(255, 255, 255, .07));
+  --glass-blur: blur(26px) saturate(180%);
+}
+
+/* panelek: féligátlátszó test, belső fény, üveg-elmosás */
+.card,
+.feedback,
+.reviews,
+.share-box,
+.cash-stat,
+.auth-card {
+  border-color: var(--glass-brd);
+  background-image: var(--glass-sheen);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-hi), 0 20px 46px -26px rgba(0, 0, 0, .95);
+}
+
+/* gombok: üveg-test + belső kiemelés (a lime gomb marad lime) */
+.btn {
+  border-color: var(--glass-brd);
+  box-shadow: var(--glass-hi);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+}
+.btn:not(.btn-primary):not(.is-on) {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .11), rgba(255, 255, 255, .03));
+}
+.btn-primary {
+  border-color: rgba(255, 255, 255, .38);
+  box-shadow: var(--glass-hi), 0 12px 28px -12px rgba(216, 224, 47, .6);
+}
+
+/* szűrők, címkék, lapfülek */
+.chip,
+.fb-tag,
+.auth-tabs {
+  border-color: var(--glass-brd);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .03));
+  box-shadow: var(--glass-hi);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+}
+
+/* mezők: vékony üveg-cső, belső fény */
+#searchInput,
+#authName,
+#authEmail,
+#authPassword,
+#authPassword2,
+.fb-note,
+.chat-form input,
+.fr-search input,
+.cash-form input {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .028));
+  border-color: var(--glass-brd);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+}
+
+/* sorok: lebegő, elmosódó sávok */
+.rank-row,
+.fr-row,
+.cash-row,
+.review-row {
+  border-color: rgba(255, 255, 255, .10);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .018));
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+
+/* üzenet-buborékok: üvegtest */
+.msg-bubble {
+  border-color: rgba(255, 255, 255, .14);
+  background-image: linear-gradient(150deg, rgba(255, 255, 255, .11), rgba(255, 255, 255, .04));
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  box-shadow: var(--glass-hi);
+}
+.msg.is-mine .msg-bubble {
+  background-image: none;
+  border-color: rgba(216, 224, 47, .45);
+}
+
+/* dokk, lap, réteg: fényesebb él + belső kiemelés, mély árnyék */
+.dock,
+.sheet,
+.overlay {
+  border-color: var(--glass-brd);
+  box-shadow: var(--glass-hi), var(--shadow);
+}
+.topbar {
+  border-color: var(--glass-brd);
+  box-shadow: var(--glass-hi);
+}
+
+/* a bejelentkezési lapka: sötét, féligátlátszó üvegtest (ne vesszen el a térkép felett) */
+.auth-card {
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .02) 48%, rgba(255, 255, 255, .05)),
+    linear-gradient(170deg, rgba(14, 16, 12, .76), rgba(4, 5, 6, .86));
+}

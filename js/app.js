@@ -349,6 +349,14 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.fbScores.addEventListener('mouseleave', function () {
       Array.prototype.forEach.call(el.fbScores.children, function (c) { c.classList.remove('is-hover'); });
     });
+
+    // gradient sávos csúszka (nagy skála)
+    if (el.fbRange) {
+      el.fbRange.addEventListener('input', function () {
+        state.fb.score = +el.fbRange.value;
+        paintFb();
+      });
+    }
     el.fbTags.addEventListener('click', function (e) {
       var b = e.target.closest('.fb-tag');
       if (!b) return;
@@ -391,6 +399,11 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     });
   }
 
+  var SCORE_VERDICT = {
+    1: 'Katasztrofális', 2: 'Nagyon gyenge', 3: 'Gyenge', 4: 'Alig elfogadható',
+    5: 'Átlagos', 6: 'Jó', 7: 'Megbízható', 8: 'Nagyon jó', 9: 'Kiváló', 10: 'Kifogástalan'
+  };
+
   function paintFb() {
     Array.prototype.forEach.call(el.fbScores.children, function (c) {
       var on = +c.dataset.score === state.fb.score;
@@ -403,6 +416,16 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     Array.prototype.forEach.call(el.fbTags.children, function (c) {
       c.classList.toggle('is-on', state.fb.tags.indexOf(c.dataset.tag) !== -1);
     });
+
+    // nagy skála: szám + ítélet + gradient sáv
+    var sc = state.fb.score || 0;
+    if (el.fbBigNum) el.fbBigNum.textContent = sc || '–';
+    if (el.fbVerdict) el.fbVerdict.textContent = sc ? (SCORE_VERDICT[sc] || '') : 'Adj pontszámot';
+    if (el.fbRange) {
+      if (sc) el.fbRange.value = sc;
+      el.fbRange.setAttribute('aria-valuetext', sc ? sc + ' / 10 pont' : 'nincs kiválasztva');
+    }
+    if (el.fbScale) el.fbScale.classList.toggle('is-empty', !sc);
   }
 
   var hoverScore = 0;
@@ -5059,7 +5082,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'routeCard', 'routeClose', 'routeModes', 'routeDist', 'routeTime', 'routeName',
      'routeAddr', 'routeSteps', 'routeStepsToggle', 'routeStart', 'routeGo', 'routeDetail',
      'stepNav', 'stepPrev', 'stepNext', 'stepLabel', 'stepReset',
-     'feedback', 'fbScores', 'fbTags', 'fbNote', 'fbSend', 'fbDelete', 'fbDone'
+     'feedback', 'fbScores', 'fbTags', 'fbNote', 'fbSend', 'fbDelete', 'fbDone',
+     'fbScale', 'fbRange', 'fbBigNum', 'fbVerdict'
     ].forEach(function (id) { el[id] = $(id); });
 
     initMap();

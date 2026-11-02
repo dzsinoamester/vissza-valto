@@ -574,6 +574,18 @@
       <p class="fb-sub">Az értékelésed segít a többieknek. Csak ezen az eszközön tárolódik.</p>
     </div>
 
+    <!-- nagy skálázás: szám + ítélet + gradient sáv, alatta a régi 10 gomb (rejtve, a JS kezeli) -->
+    <div class="fb-scale" id="fbScale" data-empty="1">
+      <div class="fb-rings" aria-hidden="true"></div>
+      <div class="fb-big"><b id="fbBigNum">–</b><span>/10</span></div>
+      <div class="fb-verdict" id="fbVerdict">Adj pontszámot</div>
+      <div class="fb-track">
+        <input type="range" id="fbRange" min="1" max="10" step="1" value="1"
+          aria-label="Pontszám 1-től 10-ig" aria-valuetext="nincs kiválasztva">
+      </div>
+      <div class="fb-marks" aria-hidden="true"><span>1</span><span>5</span><span>10</span></div>
+    </div>
+
     <div class="fb-scores" id="fbScores" role="radiogroup" aria-label="Pontszám 1-től 10-ig"></div>
 
     <div class="fb-tags" id="fbTags" role="group" aria-label="Címkék"></div>
