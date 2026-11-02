@@ -490,6 +490,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (low.indexOf('could not find the function') !== -1 || low.indexOf('pgrst202') !== -1) return 'A fióktörlő függvény hiányzik az adatbázisból: futtasd a data/supabase-extra.sql-t a Supabase SQL Editorban, majd próbáld újra.';
     if (low.indexOf('permission denied') !== -1) return 'Nincs jogosultság a művelethez: futtasd újra a data/supabase-extra.sql-t (grant execute).';
 
+    if (low.indexOf('row-level security') !== -1 || low.indexOf('row level security') !== -1 ||
+        low.indexOf('25003') !== -1) {
+      var tbl = ((m.match(/row-level security policy for table "?([\w.]+)"?/) || [])[1]) || '';
+      return 'Jogosultsági hiba' + (tbl ? ' a(z) ' + tbl + ' táblánál' : ' a beszélgetésnél') +
+        ': futtasd újra a data/supabase-friends.sql fájlt a Supabase SQL Editorban, majd próbáld küldeni az üzenetet.';
+    }
     if (low.indexOf('friend') !== -1 || low.indexOf('conversation') !== -1 || low.indexOf('pokes') !== -1 ||
         low.indexOf('point_reviews') !== -1 || low.indexOf('user_names') !== -1) {
       return 'A közösségi funkciókhoz futtasd a data/supabase-friends.sql fájlt a Supabase SQL Editorban.';
@@ -4643,16 +4649,34 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     var uid = account.user.id;
     var convId = 'dm-' + [uid, otherId].sort().join('-');
 
-    sb.from('conversations').upsert(
-      { id: convId, kind: 'dm', created_by: uid },
-      { onConflict: 'id', ignoreDuplicates: true }
-    )
+    // A DM azonosítója kiszámítható: ha már létezik (pl. a barátod hozta létre),
+    // NEM írjuk felül — az RLS a WITH CHECK feltételt az ON CONFLICT DO NOTHING
+    // előtt is ellenőrzi, így a "created_by = auth.uid()" ilyenkor hibát adna.
+    sb.from('conversations').select('id').eq('id', convId).maybeSingle()
       .then(function (r) {
         if (r.error) throw r.error;
-        return sb.from('conversation_members').upsert([
+        if (r.data) return null; // már megvan, a barát hozta létre
+        return sb.from('conversations').insert({
+          id: convId, kind: 'dm', created_by: uid
+        }).then(function (ins) {
+          // párhuzamos létrehozásnál 23505 (duplicate) → nincs tennivaló
+          if (ins.error && ins.error.code !== '23505') throw ins.error;
+          return null;
+        });
+      })
+      .then(function () {
+        // 1) ELŐBB a saját tagságom — az RLS a beszélgetés sorát csak tagnak
+        //    engedi látni, enélkül a barát tagsága nem szúrható be
+        return sb.from('conversation_members').upsert(
           { conversation_id: convId, user_id: uid },
-          { conversation_id: convId, user_id: otherId }
-        ], { onConflict: 'conversation_id,user_id', ignoreDuplicates: true });
+          { onConflict: 'conversation_id,user_id', ignoreDuplicates: true });
+      })
+      .then(function (r) {
+        if (r.error) throw r.error;
+        // 2) ezután jöhet a barát (létrehozóként már látom a beszélgetést)
+        return sb.from('conversation_members').upsert(
+          { conversation_id: convId, user_id: otherId },
+          { onConflict: 'conversation_id,user_id', ignoreDuplicates: true });
       })
       .then(function (r) {
         if (r.error) throw r.error;
@@ -4729,9 +4753,18 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     sb.from('conversations').insert({ id: id, kind: 'group', name: name, created_by: uid })
       .then(function (r) {
         if (r.error) throw r.error;
-        var rows = [uid].concat(memberIds).map(function (u) {
+        // 1) előbb a saját taggá válásom (RLS: a beszélgetés csak tagnak látszik)
+        return sb.from('conversation_members').upsert(
+          { conversation_id: id, user_id: uid },
+          { onConflict: 'conversation_id,user_id', ignoreDuplicates: true });
+      })
+      .then(function (r) {
+        if (r.error) throw r.error;
+        // 2) utána jöhetnek a többiek
+        var rows = memberIds.map(function (u) {
           return { conversation_id: id, user_id: u };
         });
+        if (!rows.length) return null;
         return sb.from('conversation_members').upsert(rows, {
           onConflict: 'conversation_id,user_id', ignoreDuplicates: true
         });

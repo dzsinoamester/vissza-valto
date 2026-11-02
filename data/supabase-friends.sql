@@ -134,7 +134,9 @@ drop policy if exists "tagság olvasása" on public.conversation_members;
 create policy "tagság olvasása" on public.conversation_members
   for select to authenticated using (user_id = auth.uid());
 
--- saját magam felveszhetem, és a beszélgetés létrehozója teheti be a többieket
+-- saját magam felveszhetem; a létrehozó és a már meglévő tagok tehetik be a többieket
+-- (a tagság-olvasási politika miatt a "már tag vagyok" ág a saját sorom
+--  megléte nélkül nem látná a beszélgetést — ezért a sorrend a JS-ben is fontos)
 drop policy if exists "tagság írása" on public.conversation_members;
 create policy "tagság írása" on public.conversation_members
   for insert to authenticated
@@ -143,6 +145,10 @@ create policy "tagság írása" on public.conversation_members
     or exists (
       select 1 from public.conversations c
       where c.id = conversation_id and c.created_by = auth.uid()
+    )
+    or exists (
+      select 1 from public.conversation_members m
+      where m.conversation_id = conversation_id and m.user_id = auth.uid()
     )
   );
 
