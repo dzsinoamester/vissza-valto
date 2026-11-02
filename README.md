@@ -60,9 +60,18 @@ Az oldal statikus, a fiókokat a projekt Supabase példánya kezeli (`js/config.
    `data/supabase-extra.sql` (ez hozza létre a `profiles`/`ratings` táblát, az RLS-t és a
    regisztrációs triggert).
 2. **Szolgáltató** – Authentication → Providers → *Email* legyen bekapcsolva.
-3. **URL-ek** – Authentication → URL Configuration: Site URL a saját domained, a Redirect
-   URLs közé pedig `https://<domained>/**` és fejlesztéshez `http://localhost:8080/**`
-   (a megerősítő és jelszó-visszaállító linkek ide térnek vissza).
+3. **URL-ek** – Authentication → URL Configuration:
+   * **Site URL** = a saját domained (`https://<domain>/`). A Supabase alapértelmezése
+     `http://localhost:3000` – ha ezt hagyod, a regisztrációt megerősítő e-mail linkje
+     `localhost`-ra mutat, ami másik eszközről (pl. telefonról) nem érhető el
+     (`ERR_CONNECTION_REFUSED`).
+   * **Redirect URLs** = `https://<domained>/**`, fejlesztéshez `http://localhost:8080/**`.
+     Ha a kód által küldött `redirectTo` nincs ezen a listán, a Supabase **a Site URL-re
+     irányít** vissza – ezért vezethet localhost-ra egy éles regisztráció után is.
+   * Authentication → Email Templates → *Confirm signup*: a hivatkozás `{{ .ConfirmationURL }}`
+     legyen (a `{{ .SiteURL }}` a fenti Site URL-t használná).
+
+   A már kiküldött levelekben a régi link marad, az újak a mentés után a jó címutat kapják.
 4. A `js/config.js`-ben csak a nyilvános `SUPABASE_URL` és publishable (`sb_publishable_…`)
    kulcs szerepel — a védelmet az adatbázis RLS-szabályai adják. `sb_secret_…` kulcsot soha ne kerüljön a fájlba.
 

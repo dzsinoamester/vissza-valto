@@ -3616,7 +3616,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       hideSuggest();
       el.searchInput.value = it.main;
       el.searchClear.hidden = false;
-      state.query = '';
+      // A helyszínjavaslatra kattintva is maradjon aktív a keresőszó,
+      // különben a lista újra az összes pontot mutatja (pl. „Mezőhegyes”).
+      state.query = it.main;
       applyFilters();
       map.easeTo({ center: [it.lng, it.lat], zoom: 14, duration: 800 });
     });
