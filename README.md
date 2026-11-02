@@ -123,6 +123,24 @@ A `data/supabase-social.sql` futtatása után (a schema + extra után) működne
 | **Kedvencek** | ★ a kártyán és a részletekben, külön „Kedvencek" szűrővel. Bejelentkezés nélkül az eszközön tárolódik, belépés után a fiókhoz szinkronizál. |
 | **Legutóbb itt váltottál** | A panel tetején kártya az utolsó úti céloddal és egy koppintásos útvonallal. Navigáció indításakor rögzítődik, fiókkal eszközök között is megmarad. |
 
+## Barátok, chat, csoportok, bökés
+
+A `data/supabase-friends.sql` futtatása után (a schema + extra + social UTÁN) működnek:
+
+| | |
+|---|---|
+| **Barátok** | A dokk **Barátok** gombján keresztül név alapú kereséssel barátkérést küldhetsz, fogadhatsz, illetve eltávolíthatod a barátaidat. |
+| **Csevegés** | A barátokkal közvetlen, a csoportokkal többtagú beszélgetés; az üzenetek a szerveren tárolódnak, a listák ~5 másodpercenként frissülnek (nincs Realtime). |
+| **Csoportok** | Új csoport létrehozása névvel és tagokkal a barátok közül. |
+| **Bökés** 🍾 | Egy koppintás a barátnak — a másik értesítést kap, a dokk gombján piros jelzés jelenik meg. |
+| **Névvel ellátott értékelések** | A pont részleteiben mindenki értékelése megjelenik a szerző nevével (a `point_reviews` nézet anonim is olvasható). |
+| **Megosztás / QR** | A részletek lapkáján a 📤 gomb QR-kódot, másolható `#pont/<id>` linket, Web Share-t és „barátoknak küldést" ad. |
+| **Mélyhivatkozás** | A `https://<oldal>/#pont/123` formájú link (QR-ból is) automatikusan megnyitja az adott REpont részleteit. |
+
+> A QR-kódot a [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) CDN-verziója rajzolja.
+> Két fiókkal tudod kipróbálni: az egyik küldi a barátkérést, a másik elfogadja — a chat end-to-end
+> teszteléséhez két külön böngészőprofil (vagy munkamenet) kell.
+
 ## Fájlok
 
 ```
@@ -134,6 +152,7 @@ data/zip-megye.json   irányítószám -> megye (a profil megye-jelvényéhez)
 data/supabase-schema.sql  profiles + ratings tábla, RLS
 data/supabase-extra.sql   profil RLS, regisztrációs trigger, fióktörlés
 data/supabase-social.sql  jelentések, kedvencek, látogatások, értékelés-összesítő
+data/supabase-friends.sql barátok, csoportok, chat, bökés, névvel ellátott értékelések
 tools/fetch-data.mjs  adatfrissítés
 tools/gen-megye.mjs   irányítószám -> megye tábla generálása
 tools/serve.mjs       helyi kiszolgáló fejlesztéshez

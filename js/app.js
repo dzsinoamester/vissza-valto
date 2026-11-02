@@ -373,6 +373,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       el.fbDelete.hidden = false;
       applyFilters();
       refreshSheetRate();
+      loadPointReviews(selectedId);
       toast('Visszajelzés elküldve ✓');
     });
 
@@ -465,6 +466,11 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (low.indexOf('rate limit') !== -1 || low.indexOf('too many requests') !== -1) return 'Túl sok próbálkozás — várj egy percet, majd próbáld újra.';
     if (low.indexOf('could not find the function') !== -1 || low.indexOf('pgrst202') !== -1) return 'A fióktörlő függvény hiányzik az adatbázisból: futtasd a data/supabase-extra.sql-t a Supabase SQL Editorban, majd próbáld újra.';
     if (low.indexOf('permission denied') !== -1) return 'Nincs jogosultság a művelethez: futtasd újra a data/supabase-extra.sql-t (grant execute).';
+
+    if (low.indexOf('friend') !== -1 || low.indexOf('conversation') !== -1 || low.indexOf('pokes') !== -1 ||
+        low.indexOf('point_reviews') !== -1 || low.indexOf('user_names') !== -1) {
+      return 'A közösségi funkciókhoz futtasd a data/supabase-friends.sql fájlt a Supabase SQL Editorban.';
+    }
     if (low.indexOf('database error') !== -1 || low.indexOf('relation') !== -1) return 'Az adatbázis nincs előkészítve: futtasd a data/supabase-schema.sql, majd a data/supabase-extra.sql fájlt.';
     if (low.indexOf('failed to fetch') !== -1 || low.indexOf('networkerror') !== -1) return 'Nincs kapcsolat a szerverrel — ellenőrizd az internetet.';
     return m;
@@ -658,8 +664,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         social.accountUser = account.user.id;
         loadAccountSocial();
       }
+      startSocialTick();
+      refreshFriendData();
+      pollPokes();
     } else {
       social.accountUser = null;
+      stopSocialTick();
     }
   }
 
@@ -3125,6 +3135,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     setSelected(id);
     loadFbIntoUI(id);
     refreshSheetRate();
+    try { history.replaceState(null, '', '#pont/' + id); } catch (e) { }
 
     if (opts.fromMap) {
       if (isMobile()) openSheet(p); else openPopupFor(p);
@@ -3149,6 +3160,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     refreshSheetFav();
     refreshSheetSocial();
     refreshSheetRate();
+    if (el.shareBox) el.shareBox.hidden = true;
+    loadPointReviews(p.id);
 
     var hrs = hoursOf(p);
     var today = now.getDay();
@@ -3181,6 +3194,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         toast('A másolás nem támogatott ebben a böngészőben');
       }
     };
+
+    if (el.sheetShare) {
+      el.sheetShare.onclick = function () {
+        if (el.shareBox.hidden) renderShareBox(p.id); else el.shareBox.hidden = true;
+      };
+    }
 
     el.sheet.hidden = false;
     el.sheetScrim.hidden = false;
@@ -3277,6 +3296,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           '</div>';
         }).join('');
       }
+    } else if (kind === 'friends') {
+      el.overlayEyebrow.textContent = 'Közösség';
+      el.overlayTitle.textContent = 'Barátok';
+      renderFriendsView();
     } else {
       el.overlayEyebrow.textContent = 'Profil';
       el.overlayTitle.textContent = 'Profilom';
@@ -3511,6 +3534,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       if (overlayKind === 'profile') openOverlay('profile');
       var pos = positionFromHash();
       if (pos) setMe(pos.lat, pos.lng, null);
+      openPointFromHash();
       setTimeout(maybeIntro, 700);
     } catch (e) {
       var p = el.loader.querySelector('p');
@@ -3523,6 +3547,18 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (!m) return null;
     var lat = parseFloat(m[1]), lng = parseFloat(m[2]);
     return (isFinite(lat) && isFinite(lng)) ? { lat: lat, lng: lng } : null;
+  }
+
+  function pointFromHash() {
+    var m = (location.hash || '').match(/^#pont\/(\d+)$/);
+    return m ? +m[1] : null;
+  }
+
+  function openPointFromHash() {
+    var id = pointFromHash();
+    if (id == null || !ready.data || !state.byId.has(id)) return;
+    if (selectedId === id && el.sheet && !el.sheet.hidden) return;
+    select(id, {});
   }
 
   async function loadMeta() {
@@ -3564,7 +3600,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   }
 
   function setDock(activeId) {
-    ['dockTop', 'dockMap', 'dockProfile', 'dockSearch'].forEach(function (id) {
+    ['dockTop', 'dockMap', 'dockFriends', 'dockProfile', 'dockSearch'].forEach(function (id) {
       if (el[id]) el[id].classList.toggle('is-active', id === activeId);
     });
     syncDockPill();
@@ -3574,7 +3610,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   function syncDockPill() {
     if (!el.dock) return;
     var active = null;
-    ['dockTop', 'dockMap', 'dockProfile', 'dockSearch'].forEach(function (id) {
+    ['dockTop', 'dockMap', 'dockFriends', 'dockProfile', 'dockSearch'].forEach(function (id) {
       if (el[id] && el[id].classList.contains('is-active')) active = el[id];
     });
     if (!active || !active.offsetWidth) {
@@ -3805,7 +3841,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     });
 
     // Dokk
+
     el.dockTop.addEventListener('click', function () { setSearchOpen(false); openOverlay('top'); setDock('dockTop'); });
+    el.dockFriends.addEventListener('click', function () { setSearchOpen(false); openFriendsOverlay(); setDock('dockFriends'); });
     el.dockMap.addEventListener('click', function () {
       closeOverlay();
       setSearchOpen(false);
@@ -3827,6 +3865,40 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       if (isMobile()) el.panel.classList.add('is-expanded');
       el.searchInput.focus();
       el.searchInput.select();
+    });
+
+    // Mélyhivatkozás: #pont/<id> (QR / megosztott link)
+    window.addEventListener('hashchange', openPointFromHash);
+
+    // Megosztás a pont részleteiben (link, QR, Web Share, barátoknak)
+    if (el.shareCopy) el.shareCopy.addEventListener('click', function () {
+      if (selectedId != null) copyText(pointUrl(selectedId));
+    });
+    if (el.shareNative) el.shareNative.addEventListener('click', function () {
+      if (selectedId == null) return;
+      var sp = state.byId.get(selectedId);
+      var data = { title: sp ? sp.name : 'REpont', url: pointUrl(selectedId) };
+      if (navigator.share) navigator.share(data).catch(function () { });
+      else copyText(data.url);
+    });
+    if (el.shareFriend) el.shareFriend.addEventListener('click', function () {
+      if (selectedId != null) sharePointToFriend(selectedId);
+    });
+
+    // Barátok / csoportok / chat / bökés
+    el.overlay.addEventListener('click', friendsClick);
+    el.overlay.addEventListener('submit', function (e) {
+      var f = e.target;
+      if (!f || !f.dataset) return;
+      if (f.dataset.fr === 'searchform') {
+        e.preventDefault();
+        var si = f.querySelector('input');
+        if (si) searchUsers(si.value);
+      } else if (f.dataset.fr === 'sendform') {
+        e.preventDefault();
+        var mi = f.querySelector('input');
+        if (mi) sendChat(soc.chatId, mi.value);
+      }
     });
 
     // Fiók / bejelentkezés
@@ -3941,6 +4013,796 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     });
   }
 
+  /* ==================== értékelések (névvel) + megosztás / QR ==================== */
+
+  // A pont részleteiben megjelenő, névvel ellátott értékelések (point_reviews nézet)
+  function renderReviews(id, rows, err) {
+    if (!el.reviewsList || selectedId !== id) return;
+    if (err) {
+      var msg = String((err && err.message) || '');
+      var missing = err && (err.code === '42P01' || err.code === 'PGRST202' ||
+        /relation .* does not exist/i.test(msg) || /friend|point_reviews|user_names/i.test(msg));
+      el.reviewsList.innerHTML = missing
+        ? '<div class="chat-hint">Az értékelésekhez futtasd a <b>data/supabase-friends.sql</b> fájlt a Supabase SQL Editorban.</div>'
+        : '<div class="chat-hint">Az értékelések most nem érhetők el.</div>';
+      if (el.reviewsStatus) el.reviewsStatus.textContent = '';
+      return;
+    }
+    rows = rows || [];
+    if (el.reviewsStatus) el.reviewsStatus.textContent = rows.length ? rows.length + ' db' : '';
+    if (!rows.length) {
+      el.reviewsList.innerHTML = '<div class="chat-hint">Ezt a pontot még senki sem értékelte — te lehetsz az első!</div>';
+      return;
+    }
+    var uid = account.user && account.user.id;
+    el.reviewsList.innerHTML = rows.map(function (r) {
+      var bits = [];
+      var at = r.updated_at ? Date.parse(r.updated_at) : 0;
+      if (at) bits.push(fmtWhen(at));
+      (r.tags || []).forEach(function (t) { bits.push(tagLabel(t)); });
+      var who = r.display_name || 'Ismeretlen';
+      return '<div class="review-row">' +
+        '<span class="review-av" aria-hidden="true">' + esc(initial(who)) + '</span>' +
+        '<span class="rank-main"><b>' + esc(who) + (uid && r.user_id === uid ? ' <i>(te)</i>' : '') + '</b>' +
+        '<small>' + esc(bits.join(' · ')) + '</small>' +
+        (r.note ? '<p class="review-note">' + esc(r.note) + '</p>' : '') +
+        '</span>' +
+        scoreBadge(r.score) +
+      '</div>';
+    }).join('');
+  }
+
+  function loadPointReviews(id) {
+    if (!el.reviewsList) return;
+    if (id == null) return;
+    if (!sb) { renderReviews(id, []); return; }
+    el.reviewsList.innerHTML = '<div class="chat-hint">Betöltés…</div>';
+    if (el.reviewsStatus) el.reviewsStatus.textContent = '';
+    sb.from('point_reviews')
+      .select('user_id,score,tags,note,updated_at,display_name')
+      .eq('point_id', +id)
+      .order('updated_at', { ascending: false })
+      .limit(40)
+      .then(function (res) {
+        if (selectedId !== id) return;
+        if (res.error) { renderReviews(id, null, res.error); return; }
+        renderReviews(id, res.data || []);
+      })
+      .catch(function (e) { if (selectedId === id) renderReviews(id, null, e); });
+  }
+
+  // mélyhivatkozás: https://<oldal>/#pont/123
+  function pointUrl(id) {
+    return location.origin + location.pathname + '#pont/' + id;
+  }
+
+  function copyText(txt) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt)
+        .then(function () { toast('Link a vágólapra másolva'); })
+        .catch(function () { toast('Nem sikerült másolni'); });
+    } else {
+      toast('A másolás nem támogatott ebben a böngészőben');
+    }
+  }
+
+  function renderShareBox(id) {
+    if (!el.shareBox) return;
+    var p = state.byId.get(+id);
+    if (!p) return;
+    var url = pointUrl(p.id);
+    if (el.shareTitle) el.shareTitle.textContent = p.name;
+    if (el.shareUrlText) el.shareUrlText.textContent = url;
+    if (el.shareQr) {
+      if (typeof window.qrcode !== 'function') {
+        el.shareQr.innerHTML = '<span class="share-qr-missing">A QR-könyvtár nem töltődött be.</span>';
+      } else {
+        try {
+          var qr = window.qrcode(0, 'M');
+          qr.addData(url);
+          qr.make();
+          el.shareQr.innerHTML = qr.createImgTag(4, 8, 'QR-kód: ' + p.name);
+        } catch (e) {
+          el.shareQr.innerHTML = '<span class="share-qr-missing">QR-kód nem készíthető.</span>';
+        }
+      }
+    }
+    el.shareBox.hidden = false;
+  }
+
+  function pointFromHash() {
+    var m = (location.hash || '').match(/^#pont\/(\d+)$/);
+    return m ? +m[1] : null;
+  }
+
+  function openPointFromHash() {
+    var id = pointFromHash();
+    if (id == null || !ready.data || !state.byId.has(id)) return;
+    if (selectedId === id && el.sheet && !el.sheet.hidden) return;
+    select(id, {});
+  }
+
+  /* ==================== barátok, csoportok, chat, bökés ==================== */
+
+  var CHAT_KEY = 'vissza.chat-seen.v1';
+  var soc = {
+    friends: [],      // [{ id, at }]
+    requests: [],     // [{ id, at, dir: 'in'|'out' }]
+    convs: [],        // [{ id, kind, name, members, last, unread }]
+    msgs: [],         // a nyitott beszélgetés üzenetei
+    pokes: [],        // kapott, nem látott bökések
+    shownPokes: {},   // ezen a munkameneten már kiírt bökések
+    names: {},        // userId -> megjelenített név
+    seen: {},         // convId -> utoljára látott üzenet (ms)
+    search: [],
+    searchQ: '',
+    view: 'list',     // list | chat | newgroup
+    chatId: null,
+    groupPick: [],
+    pendingPoint: null,   // barátnak küldésre kijelölt pont
+    loaded: false
+  };
+  var socialTimer = 0, socialTickN = 0;
+
+  soc.seen = readJSON(CHAT_KEY, {}) || {};
+
+  function requireLogin(msg) {
+    if (!sb) { toast('A funkcióhoz Supabase-kapcsolat kell (js/config.js)'); return false; }
+    if (!account.user) {
+      authOpen('login');
+      authMessage(msg + ' — jelentkezz be, hogy használhasd.', 'info');
+      return false;
+    }
+    return true;
+  }
+
+  function initial(name) {
+    var s = String(name == null ? '' : name).trim();
+    return (s.charAt(0) || '?').toUpperCase();
+  }
+
+  function nameOf(id) {
+    if (account.user && id === account.user.id) return displayName();
+    return soc.names[id] || 'Ismeretlen';
+  }
+
+  function sortedPair(a, b) {
+    a = String(a); b = String(b);
+    return a < b ? { user_id: a, friend_id: b } : { user_id: b, friend_id: a };
+  }
+
+  function loadUserNames(ids) {
+    if (!sb || !account.user) return Promise.resolve();
+    var uniq = [];
+    (ids || []).forEach(function (id) {
+      id = String(id == null ? '' : id);
+      if (id && !soc.names[id] && uniq.indexOf(id) === -1) uniq.push(id);
+    });
+    if (!uniq.length) return Promise.resolve();
+    return sb.from('user_names').select('id,display_name').in('id', uniq)
+      .then(function (res) {
+        if (res.error || !res.data) return;
+        res.data.forEach(function (r) { if (r.display_name) soc.names[r.id] = r.display_name; });
+      })
+      .catch(function () { });
+  }
+
+  function loadFriends() {
+    if (!sb || !account.user) return Promise.resolve();
+    var uid = account.user.id;
+
+    var fP = sb.from('friendships').select('user_id,friend_id,created_at')
+      .or('user_id.eq.' + uid + ',friend_id.eq.' + uid)
+      .then(function (res) {
+        if (res.error || !res.data) return [];
+        return res.data.map(function (r) {
+          return { id: r.user_id === uid ? r.friend_id : r.user_id, at: Date.parse(r.created_at) || 0 };
+        });
+      })
+      .catch(function () { return []; });
+
+    var rP = sb.from('friend_requests').select('sender_id,receiver_id,created_at')
+      .or('sender_id.eq.' + uid + ',receiver_id.eq.' + uid)
+      .then(function (res) {
+        if (res.error || !res.data) return [];
+        return res.data.map(function (r) {
+          var incoming = r.receiver_id === uid;
+          return {
+            id: incoming ? r.sender_id : r.receiver_id,
+            at: Date.parse(r.created_at) || 0,
+            dir: incoming ? 'in' : 'out'
+          };
+        });
+      })
+      .catch(function () { return []; });
+
+    return Promise.all([fP, rP]).then(function (r) {
+      soc.friends = (r[0] || []).sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+      soc.requests = r[1] || [];
+      return loadUserNames(soc.friends.map(function (f) { return f.id; })
+        .concat(soc.requests.map(function (q) { return q.id; })));
+    }).then(function () { soc.loaded = true; });
+  }
+
+  function loadConvs() {
+    if (!sb || !account.user) return Promise.resolve();
+    var uid = account.user.id;
+
+    return sb.from('conversation_members').select('conversation_id').eq('user_id', uid)
+      .then(function (res) {
+        if (res.error || !res.data || !res.data.length) { soc.convs = []; return null; }
+        var ids = res.data.map(function (r) { return r.conversation_id; });
+
+        var cP = sb.from('conversations').select('id,kind,name,created_at').in('id', ids)
+          .then(function (r2) { return (r2 && !r2.error && r2.data) || []; })
+          .catch(function () { return []; });
+        var pP = sb.from('conversation_participants').select('conversation_id,user_id,display_name').in('conversation_id', ids)
+          .then(function (r2) { return (r2 && !r2.error && r2.data) || []; })
+          .catch(function () { return []; });
+        var mP = sb.from('messages').select('conversation_id,body,created_at,sender_id')
+          .in('conversation_id', ids)
+          .order('created_at', { ascending: false })
+          .limit(300)
+          .then(function (r2) { return (r2 && !r2.error && r2.data) || []; })
+          .catch(function () { return []; });
+
+        return Promise.all([cP, pP, mP]).then(function (r3) {
+          var cs = r3[0], ps = r3[1], ms = r3[2];
+          var last = {}, unread = {};
+          ms.forEach(function (m) {
+            if (!last[m.conversation_id]) last[m.conversation_id] = m;
+            var at = Date.parse(m.created_at) || 0;
+            if (m.sender_id !== uid && at > (soc.seen[m.conversation_id] || 0)) {
+              unread[m.conversation_id] = (unread[m.conversation_id] || 0) + 1;
+            }
+          });
+          var byConv = {};
+          ps.forEach(function (p) {
+            (byConv[p.conversation_id] = byConv[p.conversation_id] || []).push({ id: p.user_id, name: p.display_name });
+            if (p.display_name) soc.names[p.user_id] = p.display_name;
+          });
+          soc.convs = cs.map(function (c) {
+            var l = last[c.id] || null;
+            return {
+              id: c.id, kind: c.kind, name: c.name,
+              members: byConv[c.id] || [],
+              last: l ? { body: l.body, at: Date.parse(l.created_at) || 0, sender: l.sender_id } : null,
+              unread: unread[c.id] || 0
+            };
+          }).sort(function (a, b) { return (b.last ? b.last.at : 0) - (a.last ? a.last.at : 0); });
+        });
+      })
+      .catch(function () { });
+  }
+
+  function convById(id) {
+    for (var i = 0; i < soc.convs.length; i++) if (soc.convs[i].id === id) return soc.convs[i];
+    return null;
+  }
+
+  function convTitle(c) {
+    if (!c) return 'Beszélgetés';
+    if (c.kind === 'group') return c.name || 'Csoport';
+    var me = account.user && account.user.id;
+    var other = null;
+    (c.members || []).forEach(function (m) { if (m.id !== me) other = m; });
+    return other ? other.name : 'Beszélgetés';
+  }
+
+  function updateFriendsDot() {
+    var dot = el.dockFriendsDot;
+    if (!dot) return;
+    var n = soc.pokes.length + soc.requests.filter(function (q) { return q.dir === 'in'; }).length;
+    dot.hidden = !n;
+    dot.textContent = n > 9 ? '9+' : String(n || '');
+  }
+
+  function frRow(av, name, sub, acts) {
+    return '<div class="fr-row">' +
+      '<span class="fr-av" aria-hidden="true">' + esc(av) + '</span>' +
+      '<span class="rank-main"><b>' + esc(name) + '</b>' +
+      (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span>' +
+      (acts ? '<span class="fr-acts">' + acts + '</span>' : '') +
+    '</div>';
+  }
+
+  function convRowHtml(c) {
+    var title = convTitle(c);
+    var sub = c.last
+      ? (c.last.sender && !(account.user && c.last.sender === account.user.id) ? nameOf(c.last.sender) + ': ' : '') + c.last.body
+      : 'Még nincs üzenet';
+    return '<div class="fr-row' + (c.unread ? ' is-unread' : '') + '" data-fr="open" data-conv="' + esc(c.id) + '">' +
+      '<span class="fr-av" aria-hidden="true">' + (c.kind === 'group' ? '👥' : '💬') + '</span>' +
+      '<span class="rank-main"><b>' + esc(title) + '</b><small>' + esc(String(sub).slice(0, 70)) + '</small></span>' +
+      (c.unread ? '<span class="fr-badge">' + (c.unread > 9 ? '9+' : c.unread) + '</span>' : '') +
+    '</div>';
+  }
+
+  function friendsListHtml() {
+    if (!sb) return '<div class="chat-hint">A Supabase nincs bekötve (<b>js/config.js</b>) — a barátok funkció nem elérhető.</div>';
+    if (!account.user) {
+      return '<div class="overlay-empty">Jelentkezz be, hogy barátokat hívj, csevegj,<br>csoportot hozz létre és bökj.</div>' +
+        '<div class="account-actions">' +
+          '<button class="btn btn-primary" type="button" data-account="login">Bejelentkezés</button>' +
+          '<button class="btn btn-ghost" type="button" data-account="register">Regisztráció</button>' +
+        '</div>';
+    }
+    if (!soc.loaded) return '<div class="chat-hint">Betöltés…</div>';
+
+    var out = [];
+
+    if (soc.pendingPoint) {
+      var pp = state.byId.get(soc.pendingPoint);
+      out.push('<div class="fr-pending">Kinek küldöd: <b>' + esc(pp ? pp.name : ('#' + soc.pendingPoint)) + '</b>' +
+        ' <button class="p-btn p-btn-ghost" type="button" data-fr="cancelpending">Mégse</button></div>');
+    }
+
+    out.push('<form class="fr-search" data-fr="searchform">' +
+      '<input type="search" id="frSearchInput" placeholder="Név keresése…" autocomplete="off" value="' + esc(soc.searchQ) + '">' +
+      '<button class="btn btn-primary" type="submit">Keresés</button>' +
+      '</form>');
+
+    if (soc.search.length) {
+      out.push('<section class="p-sec"><div class="p-sec-head"><h3>Találatok</h3><span>' + soc.search.length + '</span></div>' +
+        '<div class="p-sec-body">' +
+        soc.search.map(function (u) {
+          var isFriend = soc.friends.some(function (f) { return f.id === u.id; });
+          var pend = soc.requests.some(function (q) { return q.id === u.id; });
+          var act = isFriend ? '<span class="fr-tag">barát ✓</span>'
+            : (pend ? '<span class="fr-tag">függő…</span>'
+              : '<button class="p-btn" type="button" data-fr="add" data-id="' + u.id + '">Felkérés</button>');
+          return frRow(initial(u.name), u.name, '', act);
+        }).join('') +
+        '</div></section>');
+    }
+
+    var incoming = soc.requests.filter(function (q) { return q.dir === 'in'; });
+    var outgoing = soc.requests.filter(function (q) { return q.dir === 'out'; });
+    if (incoming.length || outgoing.length) {
+      out.push('<section class="p-sec"><div class="p-sec-head"><h3>Barátkérések</h3>' +
+        '<span>' + (incoming.length + outgoing.length) + '</span></div><div class="p-sec-body">' +
+        incoming.map(function (q) {
+          return frRow(initial(nameOf(q.id)), nameOf(q.id), 'felkért téged',
+            '<button class="p-btn" type="button" data-fr="accept" data-id="' + q.id + '">Elfogad</button> ' +
+            '<button class="p-btn p-btn-ghost" type="button" data-fr="decline" data-id="' + q.id + '">Elutasít</button>');
+        }).join('') +
+        outgoing.map(function (q) {
+          return frRow(initial(nameOf(q.id)), nameOf(q.id), 'meghívtad',
+            '<span class="fr-tag">várakozik</span> ' +
+            '<button class="p-btn p-btn-ghost" type="button" data-fr="cancel" data-id="' + q.id + '">Visszavonás</button>');
+        }).join('') +
+        '</div></section>');
+    }
+
+    out.push('<section class="p-sec"><div class="p-sec-head"><h3>Barátaid</h3><span>' + soc.friends.length + '</span></div>' +
+      '<div class="p-sec-body">');
+    if (!soc.friends.length) {
+      out.push('<div class="chat-hint">Még nincs barátod. Keress rájuk névvel, és küldj felkérést.</div>');
+    } else {
+      out.push(soc.friends.map(function (f) {
+        var n = nameOf(f.id);
+        return frRow(initial(n), n, '',
+          '<button class="p-btn" type="button" data-fr="chat" data-id="' + f.id + '" title="Csevegés">💬</button> ' +
+          '<button class="p-btn p-btn-ghost" type="button" data-fr="poke" data-id="' + f.id + '" title="Bökés">🍾</button> ' +
+          '<button class="p-btn p-btn-ghost" type="button" data-fr="remove" data-id="' + f.id + '" title="Barát eltávolítása">✕</button>');
+      }).join(''));
+    }
+    out.push('</div></section>');
+
+    var groups = soc.convs.filter(function (c) { return c.kind === 'group'; });
+    var dms = soc.convs.filter(function (c) { return c.kind === 'dm'; });
+
+    out.push('<section class="p-sec"><div class="p-sec-head"><h3>Csoportok</h3>' +
+      '<button class="p-btn" type="button" data-fr="newgroup">+ Új</button></div><div class="p-sec-body">');
+    if (!groups.length) out.push('<div class="chat-hint">Hozz létre egy csoportot a barátaiddal.</div>');
+    else out.push(groups.map(convRowHtml).join(''));
+    out.push('</div></section>');
+
+    out.push('<section class="p-sec"><div class="p-sec-head"><h3>Üzenetek</h3><span>' + dms.length + '</span></div>' +
+      '<div class="p-sec-body">');
+    if (!dms.length) out.push('<div class="chat-hint">A 💬 gombbal indíthatsz beszélgetést egy barátoddal.</div>');
+    else out.push(dms.map(convRowHtml).join(''));
+    out.push('</div></section>');
+
+    return out.join('');
+  }
+
+  function msgsHtml() {
+    var c = convById(soc.chatId);
+    if (!soc.msgs.length) return '<div class="chat-hint">Még nincs üzenet. Írj elsőként!</div>';
+    var me = account.user && account.user.id;
+    return soc.msgs.map(function (m) {
+      var mine = m.sender_id === me;
+      var isLink = /#pont\/\d+/.test(m.body);
+      var body = isLink
+        ? '<a href="' + esc(m.body) + '" data-fr="link">📍 REpont megnyitása</a>'
+        : esc(m.body);
+      return '<div class="msg' + (mine ? ' is-mine' : '') + '">' +
+        (!mine && c && c.kind === 'group' ? '<span class="msg-who">' + esc(nameOf(m.sender_id)) + '</span>' : '') +
+        '<span class="msg-bubble">' + body + '</span>' +
+        '<span class="msg-time">' + new Date(m.at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' }) + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function chatHtml() {
+    var c = convById(soc.chatId);
+    if (!c) { soc.view = 'list'; return friendsListHtml(); }
+    return '<div class="chat-head">' +
+        '<button class="fr-back" type="button" data-fr="back" aria-label="Vissza">←</button>' +
+        '<span class="rank-main"><b>' + esc(convTitle(c)) + '</b>' +
+        '<small>' + (c.kind === 'group' ? c.members.length + ' tag' : 'közvetlen üzenet') + '</small></span>' +
+      '</div>' +
+      '<div class="chat-msgs" id="chatMsgs">' + msgsHtml() + '</div>' +
+      '<form class="chat-form" data-fr="sendform">' +
+        '<input type="text" id="chatInput" maxlength="1000" placeholder="Írj egy üzenetet…" autocomplete="off">' +
+        '<button class="btn btn-primary" type="submit">Küldés</button>' +
+      '</form>';
+  }
+
+  function newGroupHtml() {
+    var out = '<div class="chat-head">' +
+      '<button class="fr-back" type="button" data-fr="back" aria-label="Vissza">←</button>' +
+      '<span class="rank-main"><b>Új csoport</b><small>jelöld ki a tagokat</small></span>' +
+    '</div>';
+    out += '<div class="fr-search">' +
+      '<input type="text" id="groupName" maxlength="40" placeholder="Csoport neve…">' +
+      '<button class="btn btn-primary" type="button" data-fr="create">Létrehozás</button>' +
+    '</div>';
+    out += '<section class="p-sec"><div class="p-sec-head"><h3>Tagok</h3><span>' + soc.friends.length + '</span></div>' +
+      '<div class="p-sec-body">';
+    if (!soc.friends.length) {
+      out += '<div class="chat-hint">Előbb adj hozzá barátokat.</div>';
+    } else {
+      out += soc.friends.map(function (f) {
+        var on = soc.groupPick.indexOf(f.id) !== -1;
+        var n = nameOf(f.id);
+        return '<div class="fr-row is-pick' + (on ? ' is-on' : '') + '" data-fr="pick" data-id="' + f.id + '">' +
+          '<span class="fr-av" aria-hidden="true">' + esc(initial(n)) + '</span>' +
+          '<span class="rank-main"><b>' + esc(n) + '</b></span>' +
+          '<span class="fr-tag">' + (on ? '✓' : '') + '</span>' +
+        '</div>';
+      }).join('');
+    }
+    out += '</div></section>';
+    return out;
+  }
+
+  function renderFriendsView() {
+    if (!el.overlayBody) return;
+    if (soc.view === 'chat') { el.overlayBody.innerHTML = chatHtml(); scrollChat(); return; }
+    if (soc.view === 'newgroup') { el.overlayBody.innerHTML = newGroupHtml(); return; }
+    el.overlayBody.innerHTML = friendsListHtml();
+  }
+
+  // listafelfrissítés újrarajzolás nélkül, ha épp gépel a felhasználó
+  function repaintFriendsList() {
+    if (overlayKind !== 'friends' || soc.view !== 'list') return;
+    var ae = document.activeElement;
+    if (ae && el.overlayBody && el.overlayBody.contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) return;
+    el.overlayBody.innerHTML = friendsListHtml();
+  }
+
+  function scrollChat() {
+    var box = document.getElementById('chatMsgs');
+    if (box) box.scrollTop = box.scrollHeight;
+  }
+
+  function markSeen(convId) {
+    if (!convId) return;
+    soc.seen[convId] = Date.now();
+    writeJSON(CHAT_KEY, soc.seen);
+    var c = convById(convId);
+    if (c) c.unread = 0;
+    updateFriendsDot();
+  }
+
+  function refreshFriendData() {
+    if (!sb || !account.user) { updateFriendsDot(); return Promise.resolve(); }
+    return loadFriends().then(loadConvs).then(function () {
+      repaintFriendsList();
+      updateFriendsDot();
+    });
+  }
+
+  function openFriendsOverlay() {
+    soc.view = 'list';
+    soc.chatId = null;
+    openOverlay('friends');
+    if (!sb || !account.user) { updateFriendsDot(); return; }
+    refreshFriendData();
+    pollPokes();
+  }
+
+  function searchUsers(q) {
+    q = String(q == null ? '' : q).trim();
+    soc.searchQ = q;
+    if (!q) { soc.search = []; renderFriendsView(); return; }
+    if (!requireLogin('A kereséshez')) return;
+    el.overlayBody.innerHTML = '<div class="chat-hint">Keresés…</div>';
+    sb.from('user_names').select('id,display_name')
+      .ilike('display_name', '%' + q.replace(/[%_\\]/g, '') + '%')
+      .neq('id', account.user.id)
+      .limit(20)
+      .then(function (res) {
+        if (res.error) throw res.error;
+        soc.search = (res.data || []).map(function (r) {
+          if (r.display_name) soc.names[r.id] = r.display_name;
+          return { id: r.id, name: r.display_name || 'Ismeretlen' };
+        });
+        if (!soc.search.length) toast('Nincs ilyen nevű felhasználó');
+        renderFriendsView();
+      })
+      .catch(function (e) {
+        toast('A keresés nem sikerült: ' + authErr(e));
+        renderFriendsView();
+      });
+  }
+
+  function sendFriendRequest(otherId) {
+    if (!requireLogin('A felkéréshez')) return;
+    sb.from('friend_requests').insert({ sender_id: account.user.id, receiver_id: otherId })
+      .then(function (r) {
+        if (r.error) {
+          if (r.error.code === '23505') { toast('Ez a felkérés már függőben van'); return; }
+          throw r.error;
+        }
+        toast('Felkérés elküldve 🍾');
+        refreshFriendData();
+      })
+      .catch(function (e) { toast('Nem sikerült: ' + authErr(e)); });
+  }
+
+  function acceptRequest(otherId) {
+    if (!requireLogin('Az elfogadáshoz')) return;
+    var uid = account.user.id;
+    sb.from('friend_requests').delete().eq('sender_id', otherId).eq('receiver_id', uid)
+      .then(function (r) {
+        if (r.error) throw r.error;
+        return sb.from('friendships').insert(sortedPair(uid, otherId));
+      })
+      .then(function (r) {
+        if (r.error && r.error.code !== '23505') throw r.error;
+        toast('Mostantól barátok vagytok 🤝');
+        refreshFriendData();
+      })
+      .catch(function (e) { toast('Nem sikerült: ' + authErr(e)); });
+  }
+
+  function declineRequest(otherId) {
+    if (!requireLogin('Az elutasításhoz')) return;
+    sb.from('friend_requests').delete().eq('sender_id', otherId).eq('receiver_id', account.user.id)
+      .then(function (r) { if (r.error) throw r.error; refreshFriendData(); })
+      .catch(function (e) { toast('Nem sikerült: ' + authErr(e)); });
+  }
+
+  function cancelRequest(otherId) {
+    if (!requireLogin('A visszavonáshoz')) return;
+    sb.from('friend_requests').delete().eq('sender_id', account.user.id).eq('receiver_id', otherId)
+      .then(function (r) { if (r.error) throw r.error; refreshFriendData(); })
+      .catch(function (e) { toast('Nem sikerült: ' + authErr(e)); });
+  }
+
+  function removeFriend(otherId) {
+    if (!requireLogin('Az eltávolításhoz')) return;
+    if (!window.confirm('Biztosan törlöd ezt a barátot?')) return;
+    var p = sortedPair(account.user.id, otherId);
+    sb.from('friendships').delete().eq('user_id', p.user_id).eq('friend_id', p.friend_id)
+      .then(function (r) { if (r.error) throw r.error; toast('Eltávolítva a barátok közül'); refreshFriendData(); })
+      .catch(function (e) { toast('Nem sikerült: ' + authErr(e)); });
+  }
+
+  function sendPoke(otherId) {
+    if (!requireLogin('A bökéshez')) return;
+    sb.from('pokes').insert({ from_id: account.user.id, to_id: otherId })
+      .then(function (r) { if (r.error) throw r.error; toast('Megbökted 🍾'); })
+      .catch(function (e) { toast('Nem sikerült: ' + authErr(e)); });
+  }
+
+  function openDmWith(otherId, withMsg) {
+    if (!requireLogin('A csevegéshez')) return;
+    var uid = account.user.id;
+    var convId = 'dm-' + [uid, otherId].sort().join('-');
+
+    sb.from('conversations').upsert(
+      { id: convId, kind: 'dm', created_by: uid },
+      { onConflict: 'id', ignoreDuplicates: true }
+    )
+      .then(function (r) {
+        if (r.error) throw r.error;
+        return sb.from('conversation_members').upsert([
+          { conversation_id: convId, user_id: uid },
+          { conversation_id: convId, user_id: otherId }
+        ], { onConflict: 'conversation_id,user_id', ignoreDuplicates: true });
+      })
+      .then(function (r) {
+        if (r.error) throw r.error;
+        return loadConvs();
+      })
+      .then(function () {
+        openChat(convId);
+        if (withMsg) return sendChat(convId, withMsg);
+      })
+      .catch(function (e) { toast('Nem sikerült: ' + authErr(e)); });
+  }
+
+  function openChat(convId) {
+    if (!requireLogin('A csevegéshez')) return;
+    soc.chatId = convId;
+    soc.view = 'chat';
+    soc.msgs = [];
+    if (overlayKind !== 'friends') openOverlay('friends');
+    else renderFriendsView();
+    refreshChat(true);
+  }
+
+  function refreshChat(scroll) {
+    var convId = soc.chatId;
+    if (!convId || soc.view !== 'chat' || !sb || !account.user) return Promise.resolve();
+    return sb.from('messages').select('id,body,created_at,sender_id')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true })
+      .limit(300)
+      .then(function (res) {
+        if (res.error || soc.chatId !== convId || soc.view !== 'chat') return;
+        soc.msgs = (res.data || []).map(function (m) {
+          return { id: m.id, body: m.body, sender_id: m.sender_id, at: Date.parse(m.created_at) || 0 };
+        });
+        var box = document.getElementById('chatMsgs');
+        if (box) box.innerHTML = msgsHtml();
+        if (scroll !== false) scrollChat();
+        markSeen(convId);
+      })
+      .catch(function () { });
+  }
+
+  function sendChat(convId, body) {
+    body = String(body == null ? '' : body).trim().slice(0, 1000);
+    if (!body || !convId || !sb || !account.user) return Promise.resolve();
+    var input = document.getElementById('chatInput');
+    if (input) input.value = '';
+    return sb.from('messages').insert({
+      conversation_id: convId,
+      sender_id: account.user.id,
+      body: body
+    })
+      .then(function (r) {
+        if (r.error) throw r.error;
+        return refreshChat(true);
+      })
+      .catch(function (e) {
+        var again = document.getElementById('chatInput');
+        if (again) again.value = body;
+        toast('Az üzenet nem ment: ' + authErr(e));
+      });
+  }
+
+  function createGroup(name, memberIds) {
+    if (!requireLogin('A csoporthoz')) return;
+    name = String(name == null ? '' : name).trim().slice(0, 40);
+    if (!name) { toast('Adj nevet a csoportnak'); return; }
+    if (!memberIds || !memberIds.length) { toast('Jelölj ki legalább egy tagot'); return; }
+    var uid = account.user.id;
+    var id = 'grp-' + (window.crypto && window.crypto.randomUUID
+      ? window.crypto.randomUUID()
+      : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8));
+
+    sb.from('conversations').insert({ id: id, kind: 'group', name: name, created_by: uid })
+      .then(function (r) {
+        if (r.error) throw r.error;
+        var rows = [uid].concat(memberIds).map(function (u) {
+          return { conversation_id: id, user_id: u };
+        });
+        return sb.from('conversation_members').upsert(rows, {
+          onConflict: 'conversation_id,user_id', ignoreDuplicates: true
+        });
+      })
+      .then(function (r) {
+        if (r.error) throw r.error;
+        soc.groupPick = [];
+        soc.view = 'list';
+        return refreshFriendData();
+      })
+      .then(function () { openChat(id); toast('Csoport létrehozva 👥'); })
+      .catch(function (e) { toast('Nem sikerült: ' + authErr(e)); });
+  }
+
+  function sharePointToFriend(id) {
+    if (!requireLogin('A megosztáshoz')) return;
+    soc.pendingPoint = +id;
+    soc.view = 'list';
+    soc.chatId = null;
+    if (overlayKind !== 'friends') openOverlay('friends');
+    else renderFriendsView();
+    toast('Válaszd ki, kinek küldöd');
+  }
+
+  function pollPokes() {
+    if (!sb || !account.user) return Promise.resolve();
+    var uid = account.user.id;
+    return sb.from('pokes').select('id,from_id,created_at')
+      .eq('to_id', uid).eq('seen', false)
+      .order('created_at', { ascending: false })
+      .limit(20)
+      .then(function (res) {
+        if (res.error || !res.data || !res.data.length) {
+          soc.pokes = [];
+          updateFriendsDot();
+          return;
+        }
+        soc.pokes = res.data;
+        var fresh = res.data.filter(function (p) { return !soc.shownPokes[p.id]; });
+        return loadUserNames(fresh.map(function (p) { return p.from_id; })).then(function () {
+          fresh.slice(0, 3).forEach(function (p) {
+            soc.shownPokes[p.id] = 1;
+            toast(nameOf(p.from_id) + ' megbökött 🍾');
+          });
+          updateFriendsDot();
+          return sb.from('pokes').update({ seen: true })
+            .in('id', res.data.map(function (p) { return p.id; }));
+        });
+      })
+      .catch(function () { });
+  }
+
+  function startSocialTick() {
+    if (socialTimer) return;
+    socialTimer = setInterval(socialTick, 5000);
+  }
+
+  function stopSocialTick() {
+    clearInterval(socialTimer);
+    socialTimer = 0;
+  }
+
+  // egyszerű frissítés: nincs Realtime, csak időzített lekérdezés
+  function socialTick() {
+    if (!sb || !account.user || document.hidden) return;
+    socialTickN++;
+    if (overlayKind === 'friends') {
+      if (soc.view === 'chat') refreshChat(false);
+      else if (soc.view === 'list' && socialTickN % 2 === 0) refreshFriendData();
+    }
+    if (socialTickN % 3 === 0) pollPokes();
+  }
+
+  function friendsClick(e) {
+    var t = e.target.closest('[data-fr]');
+    if (!t) return;
+    var act = t.dataset.fr;
+    if (act === 'searchform' || act === 'sendform') return;
+    var id = t.dataset.id;
+
+    if (act === 'add') { sendFriendRequest(id); return; }
+    if (act === 'accept') { acceptRequest(id); return; }
+    if (act === 'decline') { declineRequest(id); return; }
+    if (act === 'cancel') { cancelRequest(id); return; }
+    if (act === 'remove') { removeFriend(id); return; }
+    if (act === 'poke') { sendPoke(id); return; }
+    if (act === 'chat') {
+      var pid = soc.pendingPoint;
+      soc.pendingPoint = null;
+      openDmWith(id, pid ? pointUrl(pid) : null);
+      return;
+    }
+    if (act === 'open') { openChat(t.dataset.conv); return; }
+    if (act === 'back') { soc.view = 'list'; soc.chatId = null; renderFriendsView(); refreshFriendData(); return; }
+    if (act === 'newgroup') { soc.view = 'newgroup'; soc.groupPick = []; renderFriendsView(); return; }
+    if (act === 'pick') {
+      var i = soc.groupPick.indexOf(id);
+      if (i === -1) soc.groupPick.push(id); else soc.groupPick.splice(i, 1);
+      renderFriendsView();
+      return;
+    }
+    if (act === 'create') {
+      var gi = document.getElementById('groupName');
+      createGroup(gi ? gi.value : '', soc.groupPick.slice());
+      return;
+    }
+    if (act === 'cancelpending') { soc.pendingPoint = null; renderFriendsView(); return; }
+    if (act === 'link') { closeOverlay(); setDock('dockMap'); return; }
+  }
+
   /* ==================== indítás ==================== */
 
   // rejtett tesztelő felület (pl. GPS nélküli demó: __vissza.navSim())
@@ -3972,7 +4834,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   function boot() {
     ['searchInput', 'searchClear', 'searchSuggest', 'locateBtn', 'resetBtn', 'panel',
      'panelGrip', 'results', 'resultsLabel', 'resultsCount', 'qbar', 'qbarList', 'qbarGo',
-     'dock', 'dockTop', 'dockMap', 'dockProfile', 'dockSearch',
+     'dock', 'dockTop', 'dockMap', 'dockProfile', 'dockSearch', 'dockFriends', 'dockFriendsDot',
      'sosBtn', 'sosView', 'sosClose', 'sosArrow', 'sosDist', 'sosBadge', 'sosName',
      'sosAddr', 'sosGo', 'sosNext', 'sosDetail', 'sosMoreList',
      'navView', 'navArrow', 'navDist', 'navStreet', 'navEta', 'navRemain', 'navTotal',
@@ -3986,7 +4848,11 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'authPassword2Field', 'authPassword2', 'authMsg', 'authSubmit', 'authForgot', 'authBack',
      'introView', 'introClose', 'introSlides', 'introDots', 'introNext', 'introRegister', 'introLogin', 'introGuest',
      'recentCard', 'recentName', 'recentMeta', 'recentGo',
+
      'sheetFav', 'sheetCommunity', 'reportBtns', 'reportStatus',
+     'sheetShare', 'shareBox', 'shareTitle', 'shareQr', 'shareUrlText',
+     'shareCopy', 'shareNative', 'shareFriend',
+     'reviewsBox', 'reviewsList', 'reviewsStatus',
      'sheet', 'sheetScrim', 'sheetType',
      'sheetName', 'sheetAddr', 'sheetDist', 'sheetRate', 'sheetHours', 'sheetMini',
      'sheetStatusBox', 'sheetStatusText', 'sheetStatusSub', 'sheetStatusBar',

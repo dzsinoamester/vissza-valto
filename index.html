@@ -210,6 +210,12 @@
       <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5.5h3V7a3 3 0 0 1-3 3M7 5.5H4V7a3 3 0 0 0 3 3"/></svg>
       <span class="dock-label">Ranglista</span>
     </button>
+    <button class="dock-btn" id="dockFriends" type="button" title="Barátok">
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 20v-1.7a3.3 3.3 0 0 0-3.3-3.3H6.3A3.3 3.3 0 0 0 3 18.3V20"/><circle cx="9.2" cy="8" r="3.3"/><path d="M17 11.3a3.3 3.3 0 0 0 0-6.5M21 20v-1.7a3.3 3.3 0 0 0-2.5-3.2"/></svg>
+      <span class="dock-label">Barátok</span>
+      <span class="dock-dot" id="dockFriendsDot" hidden></span>
+    </button>
+
     <button class="dock-btn is-active" id="dockMap" type="button" title="Térkép">
       <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>
       <span class="dock-label">Térkép</span>
@@ -476,6 +482,9 @@
         <button class="sheet-icon-btn" id="sheetFav" type="button" aria-pressed="false" aria-label="Hozzáadás a kedvencekhez">
           <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
         </button>
+        <button class="sheet-icon-btn" id="sheetShare" type="button" aria-label="Megosztás (link, QR-kód)" title="Megosztás">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5.2" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="18.8" r="2.6"/><path d="M8.4 10.7 15.6 6.5M8.4 13.3l7.2 4.2"/></svg>
+        </button>
         <button class="sheet-close" id="sheetClose" type="button" aria-label="Bezárás">✕</button>
       </div>
     </div>
@@ -537,6 +546,26 @@
     <p class="reports-hint">A jelzés 2 óráig érvényes, és mindenkinek látszik a térképen. Jelenteni bejelentkezve tudsz.</p>
   </div>
 
+  <!-- ============ Megosztás / QR-kód ============ -->
+  <div class="share-box" id="shareBox" hidden>
+    <div class="share-head">
+      <span class="fb-eyebrow">Megosztás</span>
+      <b id="shareTitle">–</b>
+    </div>
+    <div class="share-body">
+      <div class="share-qr" id="shareQr"></div>
+      <div class="share-main">
+        <small class="share-url" id="shareUrlText"></small>
+        <div class="share-actions">
+          <button class="btn btn-ghost" id="shareCopy" type="button">Link másolása</button>
+          <button class="btn btn-ghost" id="shareNative" type="button">Megosztás…</button>
+          <button class="btn btn-primary" id="shareFriend" type="button">Barátoknak</button>
+        </div>
+        <p class="share-hint">Olvasd be a QR-kódot, vagy küldd el egy barátodnak — a link a pont részleteit nyitja meg.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ Visszajelzés ============ -->
   <div class="feedback" id="feedback">
     <div class="fb-head">
@@ -563,6 +592,15 @@
     </div>
   </div>
 
+  <!-- ============ Értékelések (névvel) ============ -->
+  <div class="reviews" id="reviewsBox">
+    <div class="reviews-head">
+      <span class="fb-eyebrow">Értékelések</span>
+      <span class="reviews-status" id="reviewsStatus"></span>
+    </div>
+    <div class="reviews-list" id="reviewsList"></div>
+  </div>
+
   <div class="sheet-note">
     A visszaváltás mindig az adott üzlet nyitvatartásához kötött. A betétdíj (50 Ft/db) bolti
     utalványban, a REpont appban banki átutalással vagy jótékonysági felajánlásként térül vissza.
@@ -572,6 +610,7 @@
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="js/config.js"></script>
 <script type="module" src="js/app.js"></script>
 </body>
