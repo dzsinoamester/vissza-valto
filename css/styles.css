@@ -4853,3 +4853,24 @@ body.is-nav .stage > .dock { display: none; }
   border-color: rgba(255, 255, 255, .16);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16);
 }
+
+/* lágy sötét fátyol a szöveg mögé, hogy a célkereszt ne nyomja el az olvashatóságot */
+.sos-view::before { opacity: .42; }
+.sos-view::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 50% 21%, rgba(3, 4, 5, .58) 0 34%, rgba(3, 4, 5, .26) 54%, transparent 76%),
+    linear-gradient(180deg, transparent 50%, rgba(3, 4, 5, .5) 70%, rgba(3, 4, 5, .9) 100%);
+}
+
+.sos-dist {
+  color: #F1F79C;
+  text-shadow: 0 0 48px rgba(216, 224, 47, .4), 0 4px 22px rgba(0, 0, 0, .75);
+}
+.sos-dist-label { color: rgba(255, 255, 255, .62); text-shadow: 0 2px 10px rgba(0, 0, 0, .8); }
+.sos-body h3 { text-shadow: 0 2px 18px rgba(0, 0, 0, .85); }
+#sosAddr { color: rgba(255, 255, 255, .7); text-shadow: 0 2px 14px rgba(0, 0, 0, .8); }
