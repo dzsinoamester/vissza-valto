@@ -4573,3 +4573,283 @@ body.is-nav .stage > .dock { display: none; }
     animation: sheetPop .3s cubic-bezier(.22, .9, .3, 1) both;
   }
 }
+
+/* ===================== Ranglista – dobogó és jobbra igazított pontszám ===================== */
+
+.rank-row {
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 16px;
+  transition: background .15s ease, transform .15s ease, border-color .15s ease;
+}
+.rank-row .score {
+  order: 3;
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  font-size: 13px;
+}
+.rank-pos {
+  width: 26px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.rank-row .rank-main b { font-size: 14.5px; letter-spacing: -.3px; }
+.rank-row .rank-main small { font-size: 11px; color: rgba(255, 255, 255, .42); }
+.rank-row:hover {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .035));
+  transform: translateX(1px);
+}
+
+/* az első három hely medál-korongot kap */
+.rank-row:nth-child(-n+3) { padding: 13px 14px; }
+.rank-row:nth-child(-n+3) .rank-pos {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+.rank-row:nth-child(1) {
+  background-image: linear-gradient(100deg, rgba(216, 224, 47, .20), rgba(216, 224, 47, .055) 55%, rgba(255, 255, 255, .02));
+  border-color: rgba(216, 224, 47, .45);
+  box-shadow: 0 10px 30px -18px rgba(216, 224, 47, .8), inset 0 1px 0 rgba(255, 255, 255, .10);
+}
+.rank-row:nth-child(1) .rank-pos {
+  background: linear-gradient(180deg, #F4F9B6, #D8E02F);
+  color: #12140A;
+  box-shadow: 0 0 0 1px rgba(216, 224, 47, .5), 0 6px 16px -6px rgba(216, 224, 47, .9);
+}
+.rank-row:nth-child(2) {
+  background-image: linear-gradient(100deg, rgba(220, 228, 240, .13), rgba(255, 255, 255, .02) 60%);
+  border-color: rgba(220, 228, 240, .28);
+}
+.rank-row:nth-child(2) .rank-pos {
+  background: linear-gradient(180deg, #FAFCFE, #C2CAD6);
+  color: #14161A;
+}
+.rank-row:nth-child(3) {
+  background-image: linear-gradient(100deg, rgba(224, 162, 107, .14), rgba(255, 255, 255, .02) 60%);
+  border-color: rgba(224, 162, 107, .28);
+}
+.rank-row:nth-child(3) .rank-pos {
+  background: linear-gradient(180deg, #F6CFA6, #D08E4E);
+  color: #221208;
+}
+
+/* térköz a sorok között, és önálló kártya-keret a hajszálvonal helyett */
+.rank-row,
+.rank-row:last-child {
+  border: 1px solid rgba(255, 255, 255, .09);
+}
+.rank-row + .rank-row { margin-top: 8px; }
+
+/* ===================== SOS – koncentrikus gyűrűk a háttérben ===================== */
+
+.sos-view {
+  background:
+    radial-gradient(circle 96px at 50% 21%, rgba(216, 224, 47, .13), rgba(216, 224, 47, 0) 99%),
+    radial-gradient(circle 168px at 50% 21%, rgba(190, 203, 38, .095), rgba(190, 203, 38, 0) 99.5%),
+    radial-gradient(circle 240px at 50% 21%, rgba(142, 157, 28, .075), rgba(142, 157, 28, 0) 99.7%),
+    radial-gradient(circle 316px at 50% 21%, rgba(96, 110, 22, .06), rgba(96, 110, 22, 0) 99.8%),
+    radial-gradient(120% 90% at 50% 100%, rgba(218, 30, 40, .1), transparent 62%),
+    rgba(2, 3, 4, .95);
+}
+
+/* látható célkereszt: erősebb olív gyűrűk, éles peremmel */
+.sos-view {
+  background:
+    radial-gradient(circle 118px at 50% 21%, rgba(214, 224, 58, .34) 0 98.5%, rgba(214, 224, 58, 0) 100%),
+    radial-gradient(circle 198px at 50% 21%, rgba(172, 186, 34, .26) 0 99%, rgba(172, 186, 34, 0) 100%),
+    radial-gradient(circle 286px at 50% 21%, rgba(124, 138, 26, .22) 0 99.2%, rgba(124, 138, 26, 0) 100%),
+    radial-gradient(circle 392px at 50% 21%, rgba(82, 94, 18, .18) 0 99.4%, rgba(82, 94, 18, 0) 100%),
+    radial-gradient(120% 90% at 50% 100%, rgba(218, 30, 40, .1), transparent 62%),
+    rgba(3, 4, 6, .97);
+}
+/* a korábbi, nagy lime derengés elmosta a gyűrűk peremét */
+.sos-glow {
+  background: radial-gradient(closest-side, rgba(216, 224, 47, .05), transparent 72%);
+}
+
+/* erős, telített célkereszt – tiszta korongok, sötét peremvonallal */
+.sos-view {
+  background:
+    /* peremvonalak */
+    radial-gradient(circle 118px at 50% 21%, transparent 0 95.4%, rgba(0, 0, 0, .34) 96.4% 99%, transparent 99.6%),
+    radial-gradient(circle 198px at 50% 21%, transparent 0 97.2%, rgba(0, 0, 0, .32) 97.8% 99.2%, transparent 99.7%),
+    radial-gradient(circle 286px at 50% 21%, transparent 0 98%, rgba(0, 0, 0, .3) 98.5% 99.4%, transparent 99.8%),
+    radial-gradient(circle 392px at 50% 21%, transparent 0 98.5%, rgba(0, 0, 0, .28) 98.9% 99.6%, transparent 100%),
+    /* alsó elfátyol a lista olvashatóságáért */
+    linear-gradient(180deg, rgba(3, 4, 6, 0) 24%, rgba(3, 4, 6, .38) 44%, rgba(3, 4, 6, .64) 72%, rgba(3, 4, 6, .8) 100%),
+    /* korongok – belül a legvilágosabb */
+    radial-gradient(circle 118px at 50% 21%, #8A981D 0 100%),
+    radial-gradient(circle 198px at 50% 21%, #717D18 0 100%),
+    radial-gradient(circle 286px at 50% 21%, #5A6513 0 100%),
+    radial-gradient(circle 392px at 50% 21%, #434C0F 0 100%),
+    radial-gradient(120% 90% at 50% 100%, rgba(218, 30, 40, .1), transparent 62%),
+    #030406;
+}
+
+/* a szöveg olvasható maradjon a világosabb korongokon is */
+.sos-dist { text-shadow: 0 0 36px rgba(216, 224, 47, .9), 0 3px 16px rgba(0, 0, 0, .6); }
+.sos-dist-label { text-shadow: 0 2px 10px rgba(0, 0, 0, .65); }
+.sos-body h3 { text-shadow: 0 2px 12px rgba(0, 0, 0, .6); }
+#sosAddr { text-shadow: 0 2px 10px rgba(0, 0, 0, .6); }
+/* ===================== SOS – háttérkép + iOS-glass elemek ===================== */
+
+.sos-view {
+  background:
+    linear-gradient(180deg, rgba(3, 4, 6, .36) 0%, rgba(3, 4, 6, .48) 30%, rgba(3, 4, 6, .64) 60%, rgba(3, 4, 6, .84) 100%),
+    url("../assets/img/bg.png") center / cover no-repeat,
+    #030406;
+  /* a háttérkép miatt nincs szükség háttérelmosásra, az csak artefaktot okoz */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* felső vészjelző pirula */
+.sos-top {
+  background: rgba(255, 77, 77, .18);
+  border-color: rgba(255, 140, 140, .5);
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 12px 30px -16px rgba(0, 0, 0, .95);
+}
+.sos-eyebrow { text-shadow: 0 1px 8px rgba(0, 0, 0, .55); }
+
+/* bezárás gomb */
+.sos-close {
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .24);
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 10px 24px -14px rgba(0, 0, 0, .9);
+}
+
+/* állapot chip */
+.sos-badge {
+  background: rgba(43, 217, 124, .2);
+  border-color: rgba(43, 217, 124, .5);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .26), 0 8px 22px -14px rgba(0, 0, 0, .9);
+  letter-spacing: 1.2px;
+}
+
+/* műveletgombok */
+.sos-actions .btn {
+  border-radius: 16px;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .26), 0 12px 26px -18px rgba(0, 0, 0, .95);
+  transition: transform .16s ease, background .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.sos-actions .btn-ghost {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .05));
+  border-color: rgba(255, 255, 255, .24);
+  color: #fff;
+}
+.sos-actions .btn-ghost:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .24), rgba(255, 255, 255, .1));
+  border-color: rgba(255, 255, 255, .4);
+  transform: translateY(-1px);
+}
+.sos-actions .btn-primary {
+  background: linear-gradient(180deg, #EDF48A, #D8E02F 55%, #C2CE24);
+  color: #14160A;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 14px 30px -14px rgba(216, 224, 47, .85);
+}
+.sos-actions .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 18px 34px -14px rgba(216, 224, 47, 1);
+}
+
+/* környező pontok – üvegkártyák */
+.sos-more-item {
+  border: 1px solid rgba(255, 255, 255, .16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05));
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  border-radius: 18px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 14px 32px -22px rgba(0, 0, 0, .95);
+}
+.sos-more-item:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .09));
+  border-color: rgba(255, 255, 255, .3);
+  transform: translateX(2px);
+}
+.sos-more-head { text-shadow: 0 1px 8px rgba(0, 0, 0, .6); }
+
+.sos-ring::after { background: radial-gradient(circle, rgba(216, 224, 47, .2), transparent 66%); }
+
+/* ===================== SOS – sötét vászon, célkereszt glória ===================== */
+
+.sos-view {
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(216, 224, 47, .1), transparent 58%),
+    linear-gradient(180deg, #080a0c 0%, #050607 58%, #030405 100%);
+}
+
+/* a bg.png csak a kompasz körül jelenik meg, finoman elfutva a sötétbe */
+.sos-view::before {
+  content: "";
+  position: absolute;
+  top: 21%;
+  left: 50%;
+  width: min(140vw, 720px);
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  background: url("../assets/img/bg.png") center / cover no-repeat;
+  border-radius: 50%;
+  opacity: .55;
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 46%, rgba(0, 0, 0, .55) 62%, transparent 76%);
+  mask-image: radial-gradient(circle at 50% 50%, #000 46%, rgba(0, 0, 0, .55) 62%, transparent 76%);
+  pointer-events: none;
+  z-index: 0;
+}
+.sos-top, .sos-center, .sos-more { position: relative; z-index: 1; }
+
+/* tipográfia: kontraszt a sötét vásznon */
+.sos-dist {
+  color: #E9F16A;
+  text-shadow: 0 0 44px rgba(216, 224, 47, .45), 0 4px 20px rgba(0, 0, 0, .6);
+}
+.sos-dist-label { color: rgba(255, 255, 255, .5); letter-spacing: 2.4px; }
+.sos-body h3 { color: #fff; text-shadow: 0 2px 16px rgba(0, 0, 0, .7); }
+#sosAddr { color: rgba(255, 255, 255, .6); text-shadow: 0 2px 12px rgba(0, 0, 0, .65); }
+.sos-more-head { color: rgba(255, 255, 255, .45); }
+
+/* üvegkártyák sötét alapon */
+.sos-more-item {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .03)), rgba(8, 10, 12, .42);
+  border-color: rgba(255, 255, 255, .1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .13), 0 16px 34px -24px #000;
+}
+.sos-more-item:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .17), rgba(255, 255, 255, .06)), rgba(10, 12, 14, .5);
+  border-color: rgba(216, 224, 47, .34);
+}
+.sos-more-main small { color: rgba(255, 255, 255, .46); }
+
+/* gombok, chipek */
+.sos-actions .btn-ghost {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, .04)), rgba(8, 10, 12, .35);
+  border-color: rgba(255, 255, 255, .16);
+}
+.sos-badge {
+  background: rgba(43, 217, 124, .14);
+  border-color: rgba(43, 217, 124, .38);
+  color: #6EE7A6;
+}
+.sos-top {
+  background: rgba(255, 77, 77, .14);
+  border-color: rgba(255, 120, 120, .38);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 14px 34px -20px rgba(0, 0, 0, .95);
+}
+.sos-close {
+  background: rgba(255, 255, 255, .08);
+  border-color: rgba(255, 255, 255, .16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16);
+}
