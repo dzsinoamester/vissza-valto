@@ -4076,21 +4076,24 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     rows = rows || [];
     if (el.reviewsStatus) el.reviewsStatus.textContent = rows.length ? rows.length + ' db' : '';
     if (!rows.length) {
-      el.reviewsList.innerHTML = '<div class="chat-hint">Ezt a pontot még senki sem értékelte — te lehetsz az első!</div>';
+      el.reviewsList.innerHTML = '<div class="chat-hint is-empty"><b>Még nincs értékelés</b>' +
+        'Ezt a pontot még senki sem értékelte — te lehetsz az első!</div>';
       return;
     }
     var uid = account.user && account.user.id;
     el.reviewsList.innerHTML = rows.map(function (r) {
-      var bits = [];
+      var tags = (r.tags || []).map(tagLabel);
       var at = r.updated_at ? Date.parse(r.updated_at) : 0;
-      if (at) bits.push(fmtWhen(at));
-      (r.tags || []).forEach(function (t) { bits.push(tagLabel(t)); });
       var who = r.display_name || 'Ismeretlen';
       return '<div class="review-row">' +
         '<span class="review-av" aria-hidden="true">' + esc(initial(who)) + '</span>' +
-        '<span class="rank-main"><b>' + esc(who) + (uid && r.user_id === uid ? ' <i>(te)</i>' : '') + '</b>' +
-        '<small>' + esc(bits.join(' · ')) + '</small>' +
-        (r.note ? '<p class="review-note">' + esc(r.note) + '</p>' : '') +
+        '<span class="rank-main">' +
+          '<span class="rv-top"><b>' + esc(who) + (uid && r.user_id === uid ? ' <i>(te)</i>' : '') + '</b>' +
+          (at ? '<span class="rv-date">' + esc(fmtWhen(at)) + '</span>' : '') + '</span>' +
+          (tags.length ? '<span class="rv-tags">' + tags.map(function (t) {
+            return '<span class="rv-tag">' + esc(t) + '</span>';
+          }).join('') + '</span>' : '') +
+          (r.note ? '<p class="review-note">' + esc(r.note) + '</p>' : '') +
         '</span>' +
         scoreBadge(r.score) +
       '</div>';
