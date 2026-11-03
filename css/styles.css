@@ -4383,3 +4383,193 @@ body.is-nav .stage > .dock { display: none; }
 .reviews .review-row:first-child {
   border: 1px solid rgba(255, 255, 255, .12);
 }
+
+/* ===================== Nagy skálázás – letisztultabb ===================== */
+
+.fb-scale { padding: 22px 0 0; margin-bottom: 22px; }
+
+/* egyetlen finom gyűrű a szám körül (nem lóg rá a sávra) */
+.fb-rings {
+  top: 58px;
+  width: 148px;
+  height: 148px;
+  background: radial-gradient(circle, rgba(216, 224, 47, .12), rgba(216, 224, 47, .04) 52%, transparent 72%);
+  box-shadow: 0 0 60px rgba(216, 224, 47, .1);
+}
+.fb-rings::before {
+  inset: 0;
+  border: 1px solid rgba(216, 224, 47, .18);
+}
+.fb-rings::after { display: none; }
+
+.fb-big { gap: 6px; }
+.fb-big span { font-size: 16px; letter-spacing: 0; align-self: flex-end; margin-bottom: 9px; }
+
+/* üres állapot: kisebb gondolatjel + paszta */
+.fb-scale.is-empty .fb-big b {
+  font-size: clamp(46px, 11vw, 58px);
+  letter-spacing: -2px;
+  color: rgba(255, 255, 255, .32);
+}
+.fb-scale.is-empty .fb-verdict {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 10px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(216, 224, 47, .26);
+  background: rgba(216, 224, 47, .07);
+  color: rgba(216, 224, 47, .78);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  min-height: 0;
+}
+
+/* sáv: vékonyabb, kevesebb ragyogás */
+.fb-track { margin-top: 24px; }
+.fb-track input[type="range"] { height: 24px; }
+.fb-track input[type="range"]::-webkit-slider-runnable-track {
+  height: 12px;
+  border-color: rgba(255, 255, 255, .15);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .5), 0 6px 18px -10px rgba(216, 224, 47, .55);
+}
+.fb-track input[type="range"]::-moz-range-track {
+  height: 12px;
+  border-color: rgba(255, 255, 255, .15);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .5), 0 6px 18px -10px rgba(216, 224, 47, .55);
+}
+
+/* fogantyú: világos korong lime gyűrűvel (nem „lyuk”) */
+.fb-track input[type="range"]::-webkit-slider-thumb {
+  width: 26px;
+  height: 26px;
+  margin-top: -8px;
+  border: 3px solid #D8E02F;
+  background: #F2F4E6;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .55), 0 0 0 4px rgba(216, 224, 47, .16), 0 0 16px rgba(216, 224, 47, .35);
+}
+.fb-track input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #D8E02F;
+  background: #F2F4E6;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .55), 0 0 0 4px rgba(216, 224, 47, .16), 0 0 16px rgba(216, 224, 47, .35);
+}
+
+.fb-marks { padding: 0 7px; font-size: 10px; }
+
+/* a gyűrű üres állapotban se érjen a sávhoz */
+.fb-rings {
+  top: 54px;
+  width: 136px;
+  height: 136px;
+}
+
+/* ===================== Nagy skálázás – kör nélkül, tipográfiai irány ===================== */
+
+.fb-rings { display: none; }
+
+.fb-scale { padding: 18px 0 0; margin-bottom: 20px; }
+
+.fb-big b {
+  font-size: clamp(62px, 16vw, 84px);
+  line-height: 1;
+  letter-spacing: -4px;
+  padding: 0 2px;
+  background: linear-gradient(180deg, #F6FACB 0%, #E5EC58 44%, #C4D42A 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 10px 26px rgba(216, 224, 47, .3));
+}
+.fb-scale.is-empty .fb-big b {
+  background: none;
+  color: rgba(255, 255, 255, .3);
+  -webkit-text-fill-color: rgba(255, 255, 255, .3);
+  font-size: clamp(46px, 11vw, 56px);
+  letter-spacing: -2px;
+  filter: none;
+}
+.fb-big span { font-size: 15px; margin-bottom: 10px; color: var(--ink-3); }
+
+/* ítélet: két vékony oldaljelölő között (üres állapotban marad a pirula) */
+.fb-verdict { margin-top: 10px; }
+.fb-scale:not(.is-empty) .fb-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.fb-scale:not(.is-empty) .fb-verdict::before,
+.fb-scale:not(.is-empty) .fb-verdict::after {
+  content: '';
+  display: block;
+  width: 16px;
+  height: 1px;
+  background: currentColor;
+  opacity: .45;
+}
+
+/* egy kis lélegzet a visszajelzés kártya fölött */
+.feedback { margin-top: 18px; }
+
+/* az üzemállapot-jelzés súgója ugyanabban a dobozban, mint a lap alatti megjegyzés */
+.reports-hint.sheet-note {
+  margin: 10px 0 0;
+  padding: 11px 12px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+/* ===================== Részletek – asztali popup ablak ===================== */
+
+@media (min-width: 901px) {
+  .sheet {
+    top: 50%;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    width: min(940px, 94vw);
+    max-height: 90vh;
+    border: 1px solid var(--line-2);
+    border-radius: 28px;
+    box-shadow: 0 40px 120px -30px #000, 0 0 0 1px rgba(255, 255, 255, .04) inset;
+    --sheet-px: 34px;
+    --sheet-pt: 26px;
+    padding: var(--sheet-pt) var(--sheet-px) calc(30px + env(safe-area-inset-bottom));
+    animation: sheetPop .3s cubic-bezier(.22, .9, .3, 1) both;
+  }
+  @keyframes sheetPop {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -48%) scale(.96);
+    }
+  }
+  /* a húzófül csak mobilra kell */
+  .sheet-grip { display: none; }
+  .sheet-hero {
+    height: 240px;
+    border-radius: 28px 28px 0 0;
+  }
+}
+
+/* ===================== Ablakok (Profil, Ranglista, Barátok) – PC popup ===================== */
+
+@media (min-width: 901px) {
+  .overlay {
+    padding: 24px;
+    background: rgba(0, 0, 0, .72);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+  }
+  .overlay-card {
+    width: min(880px, 92vw);
+    max-height: 90vh;
+    border-radius: 28px;
+    border-color: var(--glass-brd);
+    padding: 30px 32px 32px;
+    box-shadow: 0 40px 120px -30px #000, 0 0 0 1px rgba(255, 255, 255, .04) inset;
+    animation: sheetPop .3s cubic-bezier(.22, .9, .3, 1) both;
+  }
+}
