@@ -4872,5 +4872,423 @@ body.is-nav .stage > .dock { display: none; }
   text-shadow: 0 0 48px rgba(216, 224, 47, .4), 0 4px 22px rgba(0, 0, 0, .75);
 }
 .sos-dist-label { color: rgba(255, 255, 255, .62); text-shadow: 0 2px 10px rgba(0, 0, 0, .8); }
+
+/* ===================== Bemutató (intro) – új hero-elrendezés ===================== */
+
+.intro {
+  display: grid;
+  place-items: center;
+  padding: clamp(12px, 2.6vw, 34px);
+  background:
+    radial-gradient(70% 55% at 16% 0%, rgba(216, 224, 47, .16), transparent 62%),
+    radial-gradient(60% 50% at 90% 104%, rgba(34, 201, 238, .1), transparent 64%),
+    linear-gradient(180deg, #07080a 0%, #040507 55%, #000 100%);
+}
+.intro::before {
+  background-size: 56px 56px;
+  opacity: .8;
+  -webkit-mask-image: radial-gradient(80% 62% at 50% 42%, #000 10%, transparent 80%);
+  mask-image: radial-gradient(80% 62% at 50% 42%, #000 10%, transparent 80%);
+}
+
+.intro-card {
+  position: relative;
+  width: min(1080px, 100%);
+  min-height: 0;
+  padding: clamp(18px, 2.4vw, 26px) clamp(18px, 2.6vw, 34px) clamp(18px, 2.4vw, 26px);
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  background: linear-gradient(180deg, rgba(20, 22, 18, .84), rgba(7, 8, 9, .94));
+  box-shadow: 0 60px 130px -50px #000, inset 0 1px 0 rgba(255, 255, 255, .08);
+  backdrop-filter: blur(30px) saturate(150%);
+  -webkit-backdrop-filter: blur(30px) saturate(150%);
+  overflow: hidden;
+}
+.intro-card::before {
+  content: "";
+  position: absolute;
+  top: -140px;
+  left: -10%;
+  width: 60%;
+  height: 340px;
+  background: radial-gradient(closest-side, rgba(216, 224, 47, .18), transparent 72%);
+  pointer-events: none;
+}
+
+.intro-top { position: relative; z-index: 2; }
+.intro-brand { font-size: 19px; }
+.intro-skip {
+  border-radius: 999px;
+  padding: 8px 15px;
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(255, 255, 255, .12);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+
+/* --- dia: két hasáb --- */
+.intro-slides {
+  position: relative;
+  z-index: 1;
+  display: block;
+  counter-reset: introStep;
+  padding: clamp(16px, 3.4vh, 34px) 0 clamp(12px, 2.4vh, 22px);
+}
+.intro-slide.is-active {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
+  grid-template-rows: auto auto 1fr;
+  column-gap: clamp(22px, 3.2vw, 46px);
+  align-items: start;
+  animation: introSlide .34s cubic-bezier(.2, .9, .3, 1) both;
+}
+@keyframes introSlide {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* lépésszám */
+.intro-slide.is-active::before {
+  grid-column: 1;
+  grid-row: 1;
+  counter-increment: introStep;
+  content: counter(introStep, decimal-leading-zero) " / 05";
+  justify-self: start;
+  margin-bottom: 16px;
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2.6px;
+  color: var(--lime);
+  opacity: .85;
+}
+
+.intro-slide h3 {
+  grid-column: 1;
+  grid-row: 2;
+  font-family: var(--display);
+  font-size: clamp(27px, 3.2vw, 42px);
+  font-weight: 600;
+  line-height: 1.04;
+  letter-spacing: -1.7px;
+  margin: 0 0 14px;
+  text-wrap: balance;
+}
+.intro-slide p {
+  grid-column: 1;
+  grid-row: 3;
+  margin: 0;
+  max-width: 44ch;
+  font-size: clamp(13.5px, 1.2vw, 15px);
+  line-height: 1.62;
+  color: var(--ink-2);
+}
+
+/* --- kép: üveg "stage" ráccsal --- */
+.intro-art {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  margin: 0;
+  aspect-ratio: 4 / 3.4;
+  border-radius: 26px;
+  border: 1px solid rgba(216, 224, 47, .22);
+  background:
+    radial-gradient(80% 70% at 50% 42%, rgba(216, 224, 47, .15), transparent 72%),
+    linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .012));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 34px 70px -46px #000;
+  overflow: hidden;
+  color: var(--lime);
+}
+.intro-art::before {
+  content: "";
+  position: absolute;
+  inset: 16% 20%;
+  width: auto;
+  height: auto;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(216, 224, 47, .22), transparent 68%);
+  filter: blur(20px);
+  animation: intro-aura 7s ease-in-out infinite alternate;
+}
+.intro-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(90deg, rgba(255, 255, 255, .055) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, .055) 1px, transparent 1px);
+  background-size: 42px 42px;
+  -webkit-mask-image: radial-gradient(62% 62% at 50% 50%, #000, transparent 78%);
+  mask-image: radial-gradient(62% 62% at 50% 50%, #000, transparent 78%);
+}
+.intro-art svg {
+  position: relative;
+  z-index: 1;
+  width: 72%;
+  height: auto;
+  filter: drop-shadow(0 22px 42px rgba(216, 224, 47, .18));
+}
+
+/* --- lábléc: pontok balra, gombok jobbra --- */
+.intro-dots { margin: 0; gap: 8px; }
+.intro-dot {
+  width: 34px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .14);
+}
+.intro-dot.is-active {
+  background: var(--lime);
+  box-shadow: 0 0 16px rgba(216, 224, 47, .6);
+}
+
+@media (min-width: 901px) {
+  .intro-card { display: flex; flex-direction: column; }
+  .intro-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .intro-actions { flex-direction: row; align-items: center; gap: 10px; }
+  .intro-actions-row { margin: 0; }
+  .intro-actions-row .btn { flex: none; }
+  .intro-actions .btn-primary { width: auto; padding: 0 28px; height: 50px; }
+  .intro-actions .btn { height: 46px; }
+  .intro-guest { order: -1; padding: 0 6px; text-decoration: none; }
+  .intro-note { display: none; }
+}
+
+@media (max-width: 900px) {
+  .intro { padding: 0; }
+  .intro-card {
+    width: 100%;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    border: 0;
+    border-radius: 0;
+    padding: 16px 18px calc(18px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  .intro-slide.is-active {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    row-gap: 0;
+  }
+  .intro-art {
+    grid-column: 1;
+    grid-row: 1;
+    aspect-ratio: 16 / 11;
+    margin-bottom: 18px;
+    border-radius: 22px;
+  }
+  .intro-slide.is-active::before { grid-column: 1; grid-row: 2; margin-bottom: 10px; }
+  .intro-slide h3 { grid-column: 1; grid-row: 3; font-size: clamp(25px, 7.4vw, 32px); }
+  .intro-slide p { grid-column: 1; grid-row: 4; }
+  .intro-dots { margin: 4px 0 16px; }
+  .intro-actions { margin-top: auto; }
+  .intro-note { margin-top: 12px; }
+}
+
+/* ===================== Bemutató v2 – egyhasábos, valódi UI-elemekkel ===================== */
+
+.intro-card { width: min(620px, 100%); }
+
+/* egy hasáb: kép felül, szöveg alatta */
+.intro-slide.is-active {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto;
+  row-gap: 0;
+}
+.intro-art {
+  grid-column: 1;
+  grid-row: 1;
+  aspect-ratio: 4 / 3;
+  max-height: 296px;
+  margin: 0 0 20px;
+}
+.intro-slide.is-active::before { grid-column: 1; grid-row: 2; margin-bottom: 10px; }
+.intro-slide h3 { grid-column: 1; grid-row: 3; font-size: clamp(25px, 6vw, 33px); }
+.intro-slide p { grid-column: 1; grid-row: 4; max-width: 46ch; }
+
+/* lábléc visszaállítása egyhasábra */
+.intro-actions { flex-direction: column; }
+.intro-actions .btn-primary { width: 100%; height: 54px; padding: 0 22px; }
+.intro-actions-row { margin: 0; }
+.intro-actions-row .btn { flex: 1; height: 46px; }
+.intro-guest { order: 0; text-decoration: underline; }
+.intro-note { display: block; margin-top: 10px; }
+
+/* --- valódi app-elemek utánzatai --- */
+.mock {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: min(300px, 86%);
+  text-align: left;
+}
+.mock-card {
+  display: block;
+  padding: 13px 15px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .03)), rgba(8, 10, 12, .55);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 26px 54px -32px #000;
+}
+.mock-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--orange);
+}
+.mock-top.is-warn { color: #FF9B9B; }
+.mock-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.mock-card b {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -.6px;
+  color: #fff;
+}
+.mock-sub { display: block; margin-top: 3px; font-size: 11px; color: rgba(255, 255, 255, .46); }
+.mock-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 11px; }
+.mock-pill {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .7px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.mock-pill.is-open { color: #6EE7A6; background: rgba(43, 217, 124, .14); border-color: rgba(43, 217, 124, .4); }
+.mock-pill.is-tired { color: #FFB3B3; background: rgba(255, 77, 77, .14); border-color: rgba(255, 120, 120, .4); }
+.mock-dist { font-family: var(--display); font-weight: 700; font-size: 12.5px; color: var(--lime); }
+
+.mock-chips { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
+.mock-chips-start { justify-content: flex-start; margin-top: 11px; }
+.mock-chip {
+  font-size: 10.5px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .03));
+  color: rgba(255, 255, 255, .72);
+  white-space: nowrap;
+}
+.mock-chip.is-on {
+  color: #14160A;
+  font-weight: 700;
+  border-color: transparent;
+  background: linear-gradient(180deg, #EDF48A, #D8E02F);
+  box-shadow: 0 10px 24px -14px rgba(216, 224, 47, .9);
+}
+
+/* értékelés */
+.mock-scale { display: flex; align-items: baseline; gap: 7px; margin-top: 6px; }
+.mock-scale b {
+  font-family: var(--display);
+  font-size: 46px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -2px;
+  background: linear-gradient(180deg, #F6FACB, #D8E02F 62%, #C4D42A);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.mock-scale span { font-size: 11px; color: rgba(255, 255, 255, .4); }
+.mock-track {
+  position: relative;
+  display: block;
+  height: 10px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #FF7A7A, #FFB24D 34%, #D8E02F);
+  opacity: .55;
+}
+.mock-knob {
+  position: absolute;
+  top: 50%;
+  left: 72%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #F2F4E6;
+  border: 3px solid #D8E02F;
+  box-shadow: 0 8px 18px -8px #000;
+}
+
+/* ranglista */
+.mock-list { display: flex; flex-direction: column; gap: 7px; width: 100%; }
+.mock-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 15px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .03));
+}
+.mock-medal {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+.mock-medal.g { background: linear-gradient(180deg, #F4F9B6, #D8E02F); color: #12140A; }
+.mock-medal.s { background: linear-gradient(180deg, #FAFCFE, #C2CAD6); color: #14161A; }
+.mock-medal.b { background: linear-gradient(180deg, #F6CFA6, #D08E4E); color: #221208; }
+.mock-name { font-size: 12.5px; font-weight: 600; color: #fff; }
+.mock-score { margin-left: auto; font-family: var(--display); font-weight: 700; font-size: 12.5px; color: var(--lime); }
+
+/* navigáció */
+.mock-big { display: block; margin-top: 8px; font-family: var(--display); font-size: 26px; font-weight: 700; letter-spacing: -1px; color: var(--lime); }
+.mock-big span { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, .5); letter-spacing: 0; }
+.mock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #14160A;
+  background: linear-gradient(180deg, #EDF48A, #D8E02F);
+  box-shadow: 0 12px 26px -14px rgba(216, 224, 47, .9);
+}
+.mock-sos {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #FFB3B3;
+  background: rgba(255, 77, 77, .16);
+  border: 1px solid rgba(255, 77, 77, .45);
+}
 .sos-body h3 { text-shadow: 0 2px 18px rgba(0, 0, 0, .85); }
 #sosAddr { color: rgba(255, 255, 255, .7); text-shadow: 0 2px 14px rgba(0, 0, 0, .8); }
