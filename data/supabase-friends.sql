@@ -293,3 +293,88 @@ $$;
 
 revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
+-- 8) Értékelés-reakciók (szív / like / dislike) és válasz-kommentek
+--    Egy értékelést a (point_id, review_user_id) pár azonosít.
+
+create table if not exists public.review_reactions (
+  point_id       bigint not null,
+  review_user_id uuid not null references auth.users(id) on delete cascade,
+  user_id        uuid not null references auth.users(id) on delete cascade,
+  kind           text not null check (kind in ('heart', 'like', 'dislike')),
+  created_at     timestamptz not null default now(),
+  primary key (point_id, review_user_id, user_id)
+);
+
+create index if not exists review_reactions_point_idx
+  on public.review_reactions (point_id);
+
+create table if not exists public.review_replies (
+  id             bigserial primary key,
+  point_id       bigint not null,
+  review_user_id uuid not null references auth.users(id) on delete cascade,
+  author_id      uuid not null references auth.users(id) on delete cascade,
+  body           text not null check (char_length(btrim(body)) between 1 and 800),
+  created_at     timestamptz not null default now()
+);
+
+create index if not exists review_replies_point_idx
+  on public.review_replies (point_id, created_at);
+
+alter table public.review_reactions enable row level security;
+alter table public.review_replies  enable row level security;
+
+drop policy if exists "reakciók olvasása" on public.review_reactions;
+create policy "reakciók olvasása" on public.review_reactions
+  for select to anon, authenticated using (true);
+
+drop policy if exists "reakció írása" on public.review_reactions;
+create policy "reakció írása" on public.review_reactions
+  for insert to authenticated with check (user_id = auth.uid());
+
+drop policy if exists "reakció módosítása" on public.review_reactions;
+create policy "reakció módosítása" on public.review_reactions
+  for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+drop policy if exists "reakció törlése" on public.review_reactions;
+create policy "reakció törlése" on public.review_reactions
+  for delete to authenticated using (user_id = auth.uid());
+
+drop policy if exists "válaszok olvasása" on public.review_replies;
+create policy "válaszok olvasása" on public.review_replies
+  for select to anon, authenticated using (true);
+
+drop policy if exists "válasz írása" on public.review_replies;
+create policy "válasz írása" on public.review_replies
+  for insert to authenticated with check (author_id = auth.uid());
+
+drop policy if exists "válasz törlése" on public.review_replies;
+create policy "válasz törlése" on public.review_replies
+  for delete to authenticated using (author_id = auth.uid());
+
+grant select on public.review_reactions, public.review_replies to anon, authenticated;
+grant insert, update, delete on public.review_reactions to authenticated;
+grant insert, delete on public.review_replies to authenticated;
+grant usage, select on sequence public.review_replies_id_seq to authenticated;
+
+-- összesített reakciók (a view a tulajdonos jogával fut, RLS nélkül)
+create or replace view public.review_reaction_counts as
+select
+  point_id,
+  review_user_id,
+  count(*) filter (where kind = 'heart')   as hearts,
+  count(*) filter (where kind = 'like')    as likes,
+  count(*) filter (where kind = 'dislike') as dislikes
+from public.review_reactions
+group by point_id, review_user_id;
+
+grant select on public.review_reaction_counts to anon, authenticated;
+
+-- válaszok a szerző megjelenített nevével
+create or replace view public.review_reply_list as
+select rr.id, rr.point_id, rr.review_user_id, rr.author_id, rr.body, rr.created_at,
+       coalesce(p.display_name, 'Ismeretlen') as display_name
+from public.review_replies rr
+left join public.profiles p on p.id = rr.author_id;
+
+grant select on public.review_reply_list to anon, authenticated;

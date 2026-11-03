@@ -4271,3 +4271,115 @@ body.is-nav .stage > .dock { display: none; }
   border-color: rgba(255, 255, 255, .12);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
 }
+/* ============ Értékelés: reakciók és válasz-kommentek ============ */
+
+.rv-social {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.rv-react,
+.rv-reply-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .11);
+  background: rgba(255, 255, 255, .04);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, transform .12s ease;
+}
+.rv-react:hover,
+.rv-reply-btn:hover {
+  background: rgba(255, 255, 255, .09);
+  border-color: rgba(255, 255, 255, .2);
+  color: var(--ink);
+}
+.rv-react:active { transform: scale(.96); }
+.rv-emo { font-size: 12.5px; line-height: 1; }
+.rv-cnt { font-weight: 600; font-size: 11px; }
+.rv-react.is-on {
+  color: var(--lime);
+  border-color: rgba(216, 224, 47, .45);
+  background: linear-gradient(180deg, rgba(216, 224, 47, .22), rgba(216, 224, 47, .08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 4px 12px -8px rgba(216, 224, 47, .7);
+}
+.rv-reply-btn.is-on {
+  color: var(--lime);
+  border-color: rgba(216, 224, 47, .35);
+  background: rgba(216, 224, 47, .1);
+}
+
+.rv-replies { display: block; margin-top: 8px; }
+.rv-reply {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0 6px 10px;
+  border-left: 2px solid rgba(216, 224, 47, .22);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.rv-reply + .rv-reply { margin-top: 2px; }
+.rv-reply b { color: var(--ink); font-size: 11.5px; font-weight: 600; }
+.rv-reply small { color: var(--ink-3); font-size: 10px; }
+.rv-reply-txt { flex: 1 1 auto; min-width: 0; word-break: break-word; }
+.rv-reply-del {
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.rv-reply-del:hover { color: var(--orange); }
+
+.rv-form { display: flex; gap: 6px; margin-top: 8px; }
+.rv-form input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .05);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  outline: 0;
+}
+.rv-form input::placeholder { color: var(--ink-3); }
+.rv-form input:focus {
+  border-color: rgba(216, 224, 47, .5);
+  box-shadow: 0 0 0 3px rgba(216, 224, 47, .14);
+}
+.rv-send {
+  height: 32px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--lime);
+  color: #0A0B03;
+  font-family: var(--display);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rv-send:active { transform: scale(.97); }
+
+/* az első kártya se veszítse el a felső keretét */
+.reviews .review-row,
+.reviews .review-row:first-child {
+  border: 1px solid rgba(255, 255, 255, .12);
+}

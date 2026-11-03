@@ -4073,7 +4073,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       if (el.reviewsStatus) el.reviewsStatus.textContent = '';
       return;
     }
+    bindRevSocial();
     rows = rows || [];
+    revSocial.point = id;
+    revSocial.rows = rows;
     if (el.reviewsStatus) el.reviewsStatus.textContent = rows.length ? rows.length + ' db' : '';
     if (!rows.length) {
       el.reviewsList.innerHTML = '<div class="chat-hint is-empty"><b>Még nincs értékelés</b>' +
@@ -4094,10 +4097,218 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
             return '<span class="rv-tag">' + esc(t) + '</span>';
           }).join('') + '</span>' : '') +
           (r.note ? '<p class="review-note">' + esc(r.note) + '</p>' : '') +
+          reviewSocialHtml(r.user_id, uid) +
         '</span>' +
         scoreBadge(r.score) +
       '</div>';
     }).join('');
+  }
+
+  /* --- értékelés-reakciók (szív / like / dislike) és válasz-kommentek --- */
+
+  var revSocial = {
+    point: null, rows: null, available: false,
+    reacts: {}, mine: {}, replies: {}, open: {}
+  };
+  var revBound = false;
+
+  function bindRevSocial() {
+    if (revBound || !el.reviewsList) return;
+    revBound = true;
+    el.reviewsList.addEventListener('click', revListClick);
+    el.reviewsList.addEventListener('submit', revListSubmit);
+  }
+
+  function repaintReviews() {
+    if (revSocial.point == null || revSocial.rows == null) return;
+    renderReviews(revSocial.point, revSocial.rows);
+  }
+
+  function reactBtn(rid, kind, emo, label, count, mine) {
+    var on = mine === kind;
+    return '<button class="rv-react' + (on ? ' is-on' : '') + '" type="button"' +
+      ' data-rv-react="' + esc(rid) + '" data-rv-kind="' + kind + '"' +
+      ' title="' + esc(label) + '" aria-label="' + esc(label) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+      '<span class="rv-emo">' + emo + '</span>' +
+      (count ? '<span class="rv-cnt">' + count + '</span>' : '') +
+      '</button>';
+  }
+
+  function reviewSocialHtml(rid, uid) {
+    if (!revSocial.available) return '';
+    var c = revSocial.reacts[rid] || { heart: 0, like: 0, dislike: 0 };
+    var mine = revSocial.mine[rid] || '';
+    var reps = revSocial.replies[rid] || [];
+    var out = '<span class="rv-social">' +
+      reactBtn(rid, 'heart', '❤️', 'Imádom', c.heart || 0, mine) +
+      reactBtn(rid, 'like', '👍', 'Tetszik', c.like || 0, mine) +
+      reactBtn(rid, 'dislike', '👎', 'Nem tetszik', c.dislike || 0, mine) +
+      '<button class="rv-reply-btn' + (revSocial.open[rid] ? ' is-on' : '') + '" type="button"' +
+      ' data-rv-reply="' + esc(rid) + '">💬 Válasz' + (reps.length ? ' · ' + reps.length : '') + '</button>' +
+      '</span>';
+    if (reps.length) {
+      out += '<span class="rv-replies">' + reps.map(function (p) {
+        return '<span class="rv-reply">' +
+          '<b>' + esc(p.display_name || 'Ismeretlen') + '</b>' +
+          '<span class="rv-reply-txt">' + esc(p.body) + '</span>' +
+          '<small>' + esc(fmtWhen(Date.parse(p.created_at))) + '</small>' +
+          (uid && p.author_id === uid
+            ? '<button class="rv-reply-del" type="button" data-rv-del="' + esc(p.id) + '" title="Válasz törlése">✕</button>'
+            : '') +
+          '</span>';
+      }).join('') + '</span>';
+    }
+    if (revSocial.open[rid]) {
+      out += '<form class="rv-form" data-rv-form="' + esc(rid) + '">' +
+        '<input type="text" maxlength="800" placeholder="Írd le a válaszod…" aria-label="Válasz az értékelésre">' +
+        '<button class="rv-send" type="submit">Küldés</button>' +
+        '</form>';
+    }
+    return out;
+  }
+
+  function loadReviewSocial(id, rows) {
+    revSocial.point = id;
+    revSocial.rows = rows;
+    revSocial.reacts = {};
+    revSocial.mine = {};
+    revSocial.replies = {};
+    revSocial.open = {};
+    revSocial.available = false;
+    if (!sb || !account.user || !(rows || []).length) return Promise.resolve();
+
+    function safe(q) {
+      return q.then(function (r) { return r; }).catch(function (e) { return { error: e }; });
+    }
+    var cq = safe(sb.from('review_reaction_counts')
+      .select('review_user_id,hearts,likes,dislikes').eq('point_id', +id));
+    var mq = safe(sb.from('review_reactions')
+      .select('review_user_id,kind').eq('point_id', +id).eq('user_id', account.user.id));
+    var pq = safe(sb.from('review_reply_list')
+      .select('id,review_user_id,author_id,body,created_at,display_name')
+      .eq('point_id', +id).order('created_at', { ascending: true }).limit(200));
+
+    return Promise.all([cq, mq, pq]).then(function (res) {
+      if (res[0].error || res[1].error || res[2].error) return;
+      revSocial.available = true;
+      (res[0].data || []).forEach(function (x) {
+        revSocial.reacts[x.review_user_id] = {
+          heart: +x.hearts, like: +x.likes, dislike: +x.dislikes
+        };
+      });
+      (res[1].data || []).forEach(function (x) {
+        revSocial.mine[x.review_user_id] = x.kind;
+      });
+      (res[2].data || []).forEach(function (p) {
+        var arr = revSocial.replies[p.review_user_id] ||
+          (revSocial.replies[p.review_user_id] = []);
+        arr.push(p);
+      });
+    });
+  }
+
+  function revReact(rid, kind) {
+    if (!requireLogin('A reakcióhoz')) return;
+    if (!sb || revSocial.point == null || !account.user) return;
+    var uid = account.user.id;
+    var prev = revSocial.mine[rid] || '';
+    var next = prev === kind ? '' : kind;
+    var c = revSocial.reacts[rid] || (revSocial.reacts[rid] = { heart: 0, like: 0, dislike: 0 });
+
+    if (prev && c[prev] > 0) c[prev]--;
+    revSocial.mine[rid] = next;
+    if (next) c[next] = (c[next] || 0) + 1;
+    repaintReviews();
+
+    var t = sb.from('review_reactions');
+    var q;
+    if (!next) {
+      q = t.delete().eq('point_id', +revSocial.point).eq('review_user_id', rid).eq('user_id', uid);
+    } else if (prev) {
+      q = t.update({ kind: next }).eq('point_id', +revSocial.point).eq('review_user_id', rid).eq('user_id', uid);
+    } else {
+      q = t.insert({
+        point_id: +revSocial.point, review_user_id: rid, user_id: uid, kind: next
+      });
+    }
+    q.then(function (r) {
+      if (!r.error) return;
+      if (next && c[next] > 0) c[next]--;
+      if (prev) c[prev] = (c[prev] || 0) + 1;
+      revSocial.mine[rid] = prev;
+      repaintReviews();
+      toast('A reakció nem ment: ' + authErr(r.error));
+    }).catch(function () { });
+  }
+
+  function revToggleReply(rid) {
+    if (!requireLogin('A válaszhoz')) return;
+    revSocial.open[rid] = !revSocial.open[rid];
+    repaintReviews();
+    if (revSocial.open[rid]) {
+      setTimeout(function () {
+        var inp = el.reviewsList.querySelector('[data-rv-form="' + rid + '"] input');
+        if (inp) inp.focus();
+      }, 40);
+    }
+  }
+
+  function revReloadReplies() {
+    if (!sb || revSocial.point == null) return;
+    sb.from('review_reply_list')
+      .select('id,review_user_id,author_id,body,created_at,display_name')
+      .eq('point_id', +revSocial.point).order('created_at', { ascending: true }).limit(200)
+      .then(function (res) {
+        if (res.error) return;
+        revSocial.replies = {};
+        (res.data || []).forEach(function (p) {
+          var arr = revSocial.replies[p.review_user_id] ||
+            (revSocial.replies[p.review_user_id] = []);
+          arr.push(p);
+        });
+        repaintReviews();
+      });
+  }
+
+  function revSendReply(rid, body) {
+    if (!requireLogin('A válaszhoz')) return;
+    if (!sb || revSocial.point == null || !account.user) return;
+    sb.from('review_replies').insert({
+      point_id: +revSocial.point, review_user_id: rid, author_id: account.user.id, body: body
+    }).then(function (r) {
+      if (r.error) { toast('A válasz nem ment: ' + authErr(r.error)); return; }
+      revSocial.open[rid] = false;
+      revReloadReplies();
+      toast('Válasz elküldve 💬');
+    }).catch(function (e) { toast('A válasz nem ment: ' + authErr(e)); });
+  }
+
+  function revDeleteReply(id) {
+    if (!sb) return;
+    sb.from('review_replies').delete().eq('id', +id).then(function (r) {
+      if (r.error) { toast('Nem sikerült törölni: ' + authErr(r.error)); return; }
+      revReloadReplies();
+      toast('Válasz törölve');
+    });
+  }
+
+  function revListClick(e) {
+    var rb = e.target.closest('[data-rv-react]');
+    if (rb) { e.preventDefault(); revReact(rb.dataset.rvReact, rb.dataset.rvKind); return; }
+    var tb = e.target.closest('[data-rv-reply]');
+    if (tb) { e.preventDefault(); revToggleReply(tb.dataset.rvReply); return; }
+    var db = e.target.closest('[data-rv-del]');
+    if (db) { e.preventDefault(); revDeleteReply(db.dataset.rvDel); return; }
+  }
+
+  function revListSubmit(e) {
+    var f = e.target.closest('[data-rv-form]');
+    if (!f) return;
+    e.preventDefault();
+    var inp = f.querySelector('input');
+    var val = inp && inp.value ? inp.value.trim() : '';
+    if (!val) { toast('Írj valamit a válaszba'); return; }
+    revSendReply(f.dataset.rvForm, val);
   }
 
   function loadPointReviews(id) {
@@ -4114,7 +4325,11 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       .then(function (res) {
         if (selectedId !== id) return;
         if (res.error) { renderReviews(id, null, res.error); return; }
-        renderReviews(id, res.data || []);
+        var rows = res.data || [];
+        renderReviews(id, rows);
+        return loadReviewSocial(id, rows).then(function () {
+          if (selectedId === id) renderReviews(id, rows);
+        });
       })
       .catch(function (e) { if (selectedId === id) renderReviews(id, null, e); });
   }
