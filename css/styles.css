@@ -5609,6 +5609,8 @@ body.is-nav .stage > .dock { display: none; }
   }
   .sheet-col::-webkit-scrollbar { width: 6px; }
   .sheet-col::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .16); border-radius: 99px; }
+  /* a kártyák tartsák meg a méretüket, ne nyomódjanak össze a hasábban */
+  .sheet-col > * { flex: 0 0 auto; }
   #sheet .sheet-hero { margin: 0; height: 148px; border-radius: 22px; }
   #sheet .reports { padding: 13px 15px; }
   #sheet .hours-toggle { margin-top: 6px; padding: 8px 12px; }
@@ -5918,8 +5920,8 @@ body.is-nav .stage > .dock { display: none; }
     max-height: none;
     overflow: visible;
     padding-right: 0;
-    /* a bezárás gomb alatt kezdődjön a tartalom */
-    padding-top: 30px;
+    /* a lebegő eszközsor (kedvenc · megosztás · bezárás) alatt kezdődjön a tartalom */
+    padding-top: 58px;
   }
   #sheet .share-box { grid-column: 2; grid-row: 2; align-self: start; }
 
@@ -5941,4 +5943,670 @@ body.is-nav .stage > .dock { display: none; }
     color: rgba(255, 255, 255, .42);
     text-align: left;
   }
+}
+
+/* ===== v7: eszközsor, interaktív fejléc-térkép, üzemállapot-figura, megosztás-popup ===== */
+
+/* --- típus badge kis ikonnal --- */
+.sheet-type { display: inline-flex; align-items: center; gap: 6px; }
+.sheet-type::before {
+  content: '';
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  -webkit-mask: center / contain no-repeat var(--type-icon);
+  mask: center / contain no-repeat var(--type-icon);
+}
+.sheet-type.automata {
+  --type-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M7 2h10a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3Zm1 3v4h4V5H8Zm0 7v5h4v-5H8Zm6-7v4h3V5h-3Zm0 7v5h3v-5h-3Z'/></svg>");
+}
+.sheet-type.kezi {
+  --type-icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a1.6 1.6 0 0 1 1.6 1.6v7.1h.9V5.4a1.6 1.6 0 0 1 3.2 0v6.3h.9V7.5a1.6 1.6 0 0 1 3.2 0V14c0 4.4-3 7-7 7h-1.4c-2 0-3.4-.7-4.6-2.2L5 14.2c-.9-1.2-.7-2.5.4-3.2 1-.6 2.1-.3 2.9.6l1 1.2V3.6A1.6 1.6 0 0 1 12 2Z'/></svg>");
+}
+
+/* --- fejléc: a mini-térkép koppintásra interaktív lesz --- */
+.sheet-hero { touch-action: pan-y; }
+.sheet-hero.is-map-live,
+.sheet-hero.is-map-live .sheet-mini { pointer-events: auto; touch-action: none; }
+.sheet-hero.is-map-live { cursor: grab; }
+.sheet-hero.is-map-live:active { cursor: grabbing; }
+.sheet-hero.is-map-live .sheet-hero-fade { opacity: .86; transition: opacity .3s ease; }
+.sheet-map-hint {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 3;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(8, 9, 11, .62);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: rgba(255, 255, 255, .74);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, -5px);
+  transition: opacity .22s ease, transform .22s ease, color .22s ease, border-color .22s ease;
+  pointer-events: none;
+}
+.sheet-hero:hover .sheet-map-hint { opacity: 1; transform: translate(-50%, 0); }
+.sheet-hero.is-map-live .sheet-map-hint {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  color: var(--lime);
+  border-color: rgba(216, 224, 47, .42);
+  background: rgba(20, 24, 10, .82);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* --- üzemállapot: animált visszaváltó-automata --- */
+.reports-stage { position: relative; display: flex; justify-content: center; }
+.reports-fig {
+  --rfig: rgba(216, 224, 47, .85);
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 268px;
+  padding: 10px 8px 6px;
+  border: 0;
+  border-radius: 18px;
+  background: none;
+  color: var(--rfig);
+  cursor: pointer;
+  transition: transform .18s ease, background .18s ease;
+}
+.reports-fig::before {
+  content: '';
+  position: absolute;
+  inset: 8px 6px 6px;
+  border-radius: 20px;
+  background: currentColor;
+  opacity: .05;
+  pointer-events: none;
+  transition: opacity .3s ease;
+}
+.reports-fig:hover::before,
+.reports-fig.is-open::before { opacity: .1; }
+.reports-fig:active { transform: scale(.985); }
+.reports-fig[data-state="tele"] { --rfig: #FF8A8A; }
+.reports-fig[data-state="urult"] { --rfig: var(--green); }
+.reports-fig[data-state="hibas"] { --rfig: var(--orange); }
+
+.rfig { display: block; width: 100%; height: auto; overflow: visible; transition: opacity .24s ease; }
+.reports-fig.is-open .rfig { opacity: .3; }
+.rfig-shadow { fill: rgba(0, 0, 0, .5); }
+.rfig-body { fill: rgba(255, 255, 255, .045); stroke: currentColor; stroke-opacity: .45; stroke-width: 2; }
+.rfig-screen { fill: currentColor; fill-opacity: .16; stroke: currentColor; stroke-opacity: .5; stroke-width: 1.6; animation: rfigScreen 4.4s ease-in-out infinite; }
+.rfig-screen-txt { stroke: currentColor; stroke-opacity: .55; stroke-width: 1.6; stroke-linecap: round; }
+.rfig-led { fill: currentColor; animation: rfigLed 1.8s steps(1, end) infinite; }
+.rfig-slot { fill: currentColor; fill-opacity: .32; }
+.rfig-window { fill: rgba(0, 0, 0, .45); stroke: currentColor; stroke-opacity: .3; stroke-width: 1.6; }
+.rfig-fill {
+  fill: currentColor;
+  fill-opacity: .16;
+  transform-box: fill-box;
+  transform-origin: bottom;
+  transform: scaleY(.12);
+  transition: transform .6s cubic-bezier(.2, .9, .3, 1);
+}
+.rfig-cans rect { fill: currentColor; fill-opacity: .42; transition: opacity .3s ease; }
+.rfig-bottle-body,
+.rfig-bottle-neck,
+.rfig-bottle-cap { fill: currentColor; fill-opacity: .55; stroke: currentColor; stroke-opacity: .5; stroke-width: 1.2; }
+.rfig-bottle { animation: rfigBob 2.6s ease-in-out infinite; }
+.rfig-x {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(.8);
+  transition: opacity .3s ease, transform .3s ease;
+}
+.rfig-x circle { fill: currentColor; fill-opacity: .15; stroke: currentColor; stroke-opacity: .5; stroke-width: 1.6; }
+.rfig-x path { stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+
+.reports-fig[data-state="tele"] .rfig-fill { transform: scaleY(1); }
+.reports-fig[data-state="tele"] .rfig-cans rect:nth-child(n+3) { opacity: .5; }
+.reports-fig[data-state="urult"] .rfig-fill { transform: scaleY(.08); }
+.reports-fig[data-state="urult"] .rfig-cans { opacity: .18; }
+.reports-fig[data-state="hibas"] .rfig-fill { transform: scaleY(.5); }
+.reports-fig[data-state="hibas"] .rfig-x { opacity: 1; transform: scale(1); }
+
+@keyframes rfigBob {
+  0%, 100% { transform: translate(64px, 25px); }
+  50% { transform: translate(64px, 31px); }
+}
+@keyframes rfigLed {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: .22; }
+}
+@keyframes rfigScreen {
+  0%, 100% { fill-opacity: .16; }
+  50% { fill-opacity: .28; }
+}
+
+.reports-fig-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, .42);
+  transition: color .2s ease;
+}
+.reports-fig:hover .reports-fig-hint { color: var(--rfig); }
+
+.reports-pop {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 6;
+  width: min(276px, 88vw);
+  padding: 13px 13px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: linear-gradient(180deg, rgba(24, 26, 21, .98), rgba(8, 9, 10, .99));
+  box-shadow: 0 30px 70px -26px #000, inset 0 1px 0 rgba(255, 255, 255, .1);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, calc(-50% + 8px)) scale(.96);
+  transition: opacity .2s ease, transform .24s cubic-bezier(.2, .9, .3, 1), visibility .24s;
+  pointer-events: none;
+}
+.reports-pop.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+}
+.reports-pop-title {
+  display: block;
+  margin-bottom: 9px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--ink-2);
+  text-align: center;
+}
+.reports-pop .reports-actions { flex-direction: column; gap: 7px; }
+.reports-pop .report-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  justify-content: flex-start;
+  padding: 10px 13px;
+  text-align: left;
+}
+.rb-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); }
+.report-btn[data-report="tele"] .rb-dot { background: #FF8A8A; }
+.report-btn[data-report="urult"] .rb-dot { background: var(--green); }
+.report-btn[data-report="hibas"] .rb-dot { background: var(--orange); }
+.report-btn.is-on .rb-dot { box-shadow: 0 0 0 3px rgba(216, 224, 47, .22); }
+
+/* --- megosztás: külön felugró ablak --- */
+.share-pop { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; padding: 18px; }
+.share-pop[hidden] { display: none; }
+.share-pop-back {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 4, 5, .62);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  animation: fade .22s ease;
+}
+.share-pop .share-box {
+  position: relative;
+  z-index: 1;
+  width: min(540px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  background: linear-gradient(180deg, rgba(20, 22, 19, .97), rgba(6, 7, 8, .99));
+  box-shadow: 0 60px 130px -50px #000, inset 0 1px 0 rgba(255, 255, 255, .1);
+  animation: shareIn .3s cubic-bezier(.2, .9, .3, 1) both;
+}
+@keyframes shareIn {
+  from { opacity: 0; transform: translateY(14px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+.share-pop-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .06);
+  color: var(--ink-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: transform .18s ease, color .18s ease, border-color .18s ease, background .18s ease;
+}
+.share-pop-close:hover {
+  transform: rotate(90deg);
+  color: #fff;
+  border-color: rgba(216, 224, 47, .5);
+  background: rgba(255, 255, 255, .12);
+}
+
+/* --- PC: kedvenc és megosztás a bezárás mellett --- */
+.sheet-topbar { display: none; }
+
+@media (min-width: 901px) {
+  .sheet-topbar {
+    position: absolute;
+    top: 16px;
+    right: 18px;
+    z-index: 22;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sheet-topbar .sheet-icon-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
+    border-color: rgba(255, 255, 255, .14);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05));
+    backdrop-filter: blur(20px) saturate(170%);
+    -webkit-backdrop-filter: blur(20px) saturate(170%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 12px 26px -16px #000;
+    color: #fff;
+  }
+  .sheet-topbar .sheet-icon-btn:hover { transform: translateY(-1px); border-color: rgba(216, 224, 47, .5); }
+  .sheet-topbar .sheet-icon-btn.is-fav {
+    color: var(--lime);
+    border-color: rgba(216, 224, 47, .55);
+    background: rgba(216, 224, 47, .18);
+  }
+  .sheet-topbar .sheet-close-far { position: static; }
+  #sheet .sheet-hero-tools { display: none; }
+
+  /* a megosztás-ablak egy kicsit jobbra */
+  .share-pop { justify-items: center; padding-left: 24vw; padding-right: 4vw; }
+  .share-pop .share-box { width: min(560px, 48vw); }
+}
+
+@media (min-width: 901px) and (max-width: 1119px) {
+  #sheet .reports-stage { justify-content: flex-start; }
+  #sheet .reports-fig { max-width: 240px; }
+}
+
+/* --- PC: feszes bal hasáb, hogy a popup görgetés nélkül elférjen --- */
+@media (min-width: 901px) {
+  .sheet-col {
+    gap: 8px;
+    max-height: calc(94vh - 96px);
+  }
+  #sheet .sheet-hero { height: 120px; }
+  #sheet .sheet-status { padding: 11px 13px; gap: 2px; }
+  #sheet .sheet-status-meta { margin-top: 1px; }
+  #sheet .hours-block { padding: 11px 13px; }
+  #sheet .hours-toggle { margin-top: 5px; padding: 7px 12px; }
+  #sheet .sheet-actions .btn { height: 48px; }
+  #sheet .reports { padding: 11px 13px 12px; }
+  #sheet .reports-fig { max-width: 132px; padding: 6px 4px 2px; }
+  #sheet .reports-hint { font-size: 10.5px; }
+}
+
+/* --- telefon: a megjegyzés láblécként --- */
+@media (max-width: 900px) {
+  .reports-fig { max-width: 232px; }
+  #sheet .sheet-col-b > .sheet-note {
+    margin: 16px calc(var(--sheet-px) * -1) calc(-22px - env(safe-area-inset-bottom));
+    padding: 12px var(--sheet-px) calc(12px + env(safe-area-inset-bottom));
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 0;
+    background: rgba(255, 255, 255, .02);
+    align-items: flex-start;
+  }
+  .share-pop { padding: 0; place-items: end center; }
+  .share-pop .share-box {
+    width: 100%;
+    max-height: 86vh;
+    padding: 18px var(--sheet-px, 18px) calc(20px + env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0;
+    border-bottom: 0;
+    animation: shareUp .32s cubic-bezier(.2, .9, .3, 1) both;
+  }
+  @keyframes shareUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rfig-bottle, .rfig-led, .rfig-screen { animation: none !important; }
+  .share-pop .share-box, .share-pop-back { animation: none !important; }
+}
+
+/* ===== v8: PC – teljes szélességű térkép-fejléc, két hasáb, középre igazított nyitvatartás ===== */
+
+.status-hours-btn,
+.hours-pop-close { display: none; }
+
+.sheet-status-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+@media (min-width: 901px) {
+  #sheet {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 22px;
+    row-gap: 14px;
+    width: min(1180px, 95vw);
+    padding: 26px 30px 26px;
+    align-items: start;
+  }
+  .sheet-col-a,
+  .sheet-col-b { display: contents; }
+
+  /* 1) a térkép a fejléc – teljes szélesség, mint a lábléc */
+  #sheet .sheet-hero {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    height: 216px;
+    border-radius: 24px;
+  }
+  #sheet .sheet-hero-body { left: 20px; right: 20px; bottom: 18px; }
+  #sheet .sheet-hero h2 { font-size: 30px; }
+
+  /* 2) állapot közvetlenül a térkép alatt, teljes szélesség */
+  #sheet .sheet-status {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding: 14px 18px;
+    gap: 3px;
+  }
+  #sheet .sheet-status-text { font-size: 22px; }
+  .status-hours-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 11px;
+    border: 1px solid rgba(255, 255, 255, .14);
+    background: rgba(255, 255, 255, .05);
+    color: var(--ink-2);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .16s ease, color .16s ease, border-color .16s ease, background .16s ease;
+  }
+  .status-hours-btn:hover {
+    color: #fff;
+    border-color: rgba(216, 224, 47, .5);
+    background: rgba(216, 224, 47, .12);
+    transform: translateY(-1px);
+  }
+
+  /* 3) útvonal-gomb teljes szélesség */
+  #sheet .sheet-actions { grid-column: 1 / -1; grid-row: 3; }
+  #sheet .sheet-actions .btn { height: 50px; border-radius: 16px; }
+
+  /* 4) üzemállapot és visszajelzés egymás mellett */
+  #sheet .reports { grid-column: 1; grid-row: 4; padding: 15px 17px 16px; }
+  #sheet .feedback { grid-column: 2; grid-row: 4; }
+
+  /* 5) értékelések teljes szélességben, kártyarácsban */
+  #sheet .reviews {
+    grid-column: 1 / -1;
+    grid-row: 5;
+    padding-top: 0;
+    max-height: none;
+    overflow: visible;
+  }
+  #sheet .reviews-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    gap: 10px;
+    align-items: start;
+  }
+  #sheet .reviews-list .chat-hint { grid-column: 1 / -1; }
+
+  /* 6) megjegyzés-lábléc teljes szélességben */
+  #sheet .sheet-col-b > .sheet-note { grid-column: 1 / -1; grid-row: 6; }
+}
+
+@media (min-width: 901px) {
+  /* a lebegő eszközsor a görgetéskor is a helyén marad (a fejléc-térkép fölött) */
+  #sheet .sheet-topbar {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+    align-self: start;
+    justify-self: end;
+    position: sticky;
+    top: 14px;
+    right: auto;
+    margin: 14px 12px 0 0;
+    z-index: 30;
+  }
+
+  /* --- nyitvatartás: középre igazatott felugró ablak (a JS a body alá helyezi PC-n) --- */
+  .hours-block.is-floating {
+    position: fixed;
+    inset: 0;
+    z-index: 1600;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: 26px;
+    border: 0;
+    border-radius: 30px;
+    background: rgba(3, 4, 5, .6);
+    backdrop-filter: blur(8px) saturate(130%);
+    -webkit-backdrop-filter: blur(8px) saturate(130%);
+    opacity: 0;
+    visibility: hidden;
+    animation: none;
+    transition: opacity .22s ease, visibility .22s;
+  }
+  .hours-block.is-floating.is-popped { opacity: 1; visibility: visible; }
+  /* a popupban minden nap látszik, a "teljes nyitvatartás" kapcsoló felesleges */
+  .hours-block.is-floating.is-popped .hours tr { display: table-row; }
+  .hours-block.is-floating .hours-toggle { display: none; }
+  .hours-block.is-floating .hours-card {
+    position: relative;
+    width: min(440px, 100%);
+    max-height: 78vh;
+    overflow-y: auto;
+    margin: 0;
+    padding: 22px 24px 20px;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    background: linear-gradient(180deg, rgba(22, 24, 20, .98), rgba(7, 8, 9, .99));
+    box-shadow: 0 60px 130px -50px #000, inset 0 1px 0 rgba(255, 255, 255, .1);
+    transform: translateY(10px) scale(.98);
+    transition: transform .26s cubic-bezier(.2, .9, .3, 1);
+    scrollbar-width: thin;
+  }
+  .hours-block.is-floating.is-popped .hours-card { transform: none; }
+  .hours-block.is-floating .hours-card .fb-eyebrow { display: block; margin-bottom: 10px; }
+  .hours-block.is-floating .hours-card .hours { font-size: 14.5px; }
+  .hours-block.is-floating .hours-pop-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+    border: 1px solid rgba(255, 255, 255, .14);
+    background: rgba(255, 255, 255, .06);
+    color: var(--ink-2);
+    font-size: 12px;
+    cursor: pointer;
+    transition: transform .18s ease, color .18s ease, border-color .18s ease, background .18s ease;
+  }
+  .hours-block.is-floating .hours-pop-close:hover {
+    transform: rotate(90deg);
+    color: #fff;
+    border-color: rgba(216, 224, 47, .5);
+    background: rgba(255, 255, 255, .12);
+  }
+
+  /* --- üzemállapot: nagyobb figura a szélesebb hasábban --- */
+  #sheet .reports-fig { max-width: 224px; padding: 8px 6px 4px; }
+  #sheet .reports-fig-hint { font-size: 10px; margin-top: 7px; }
+}
+
+/* --- a figura animációja az állapot-szöveghez igazodik --- */
+.reports-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  line-height: 1.2;
+}
+.reports-status::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .5;
+  transition: opacity .2s ease, box-shadow .2s ease;
+}
+.reports-status.is-tele::before,
+.reports-status.is-urult::before,
+.reports-status.is-hibas::before {
+  opacity: 1;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .08);
+}
+
+/* tele van: megtelt ablak, felgyűlt palackok, nincs betett palack */
+.reports-fig[data-state="tele"] .rfig-fill { transform: scaleY(1); animation: rfigFull 2.8s ease-in-out infinite; }
+.reports-fig[data-state="tele"] .rfig-cans rect { opacity: 1; animation: rfigCans 2.4s ease-in-out infinite; }
+.reports-fig[data-state="tele"] .rfig-cans rect:nth-child(even) { animation-delay: .35s; }
+.reports-fig[data-state="tele"] .rfig-bottle { display: none; }
+.reports-fig[data-state="tele"] .rfig-window { animation: rfigFullGlow 2.4s ease-in-out infinite; }
+
+/* kiürült: üres ablak, eltűnt palackok */
+.reports-fig[data-state="urult"] .rfig-fill { transform: scaleY(.08); }
+.reports-fig[data-state="urult"] .rfig-cans { opacity: .1; animation: none; }
+.reports-fig[data-state="urult"] .rfig-window { animation: rfigEmptyGlow 3.4s ease-in-out infinite; }
+
+/* nem fogadja: áthúzott ablak, villogó LED, nincs betett palack */
+.reports-fig[data-state="hibas"] .rfig-fill { transform: scaleY(.46); }
+.reports-fig[data-state="hibas"] .rfig-cans { opacity: .22; }
+.reports-fig[data-state="hibas"] .rfig-bottle { display: none; }
+.reports-fig[data-state="hibas"] .rfig-x { opacity: 1; transform: scale(1); animation: rfigX 1.7s ease-in-out infinite; }
+.reports-fig[data-state="hibas"] .rfig-led { animation: rfigLedAlert .9s steps(1, end) infinite; }
+
+.reports-fig[data-state="tele"] .reports-fig-hint,
+.reports-fig[data-state="urult"] .reports-fig-hint,
+.reports-fig[data-state="hibas"] .reports-fig-hint { color: var(--rfig); }
+
+@keyframes rfigFull {
+  0%, 100% { transform: scaleY(.97); }
+  50% { transform: scaleY(1); }
+}
+@keyframes rfigCans {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.8px); }
+}
+@keyframes rfigFullGlow {
+  0%, 100% { fill: rgba(0, 0, 0, .45); stroke-opacity: .3; }
+  50% { fill: rgba(0, 0, 0, .24); stroke-opacity: .55; }
+}
+@keyframes rfigEmptyGlow {
+  0%, 100% { stroke-opacity: .26; }
+  50% { stroke-opacity: .7; }
+}
+@keyframes rfigX {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .5; transform: scale(.93); }
+}
+@keyframes rfigLedAlert {
+  0%, 45% { opacity: 1; }
+  46%, 100% { opacity: .16; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rfig-fill, .rfig-cans rect, .rfig-window, .rfig-x, .rfig-led { animation: none !important; }
+  .hours-card { transform: none !important; transition: none !important; }
+}
+
+/* ===== v9: azonos magasságú kártyák, nagyobb figura, letisztult állapot-kártya ===== */
+
+@media (min-width: 901px) {
+  /* értékelés-kártyák: azonos magasság, a reakciósor a kártya alján */
+  #sheet .reviews-list { align-items: stretch; }
+  #sheet .reviews-list .review-row .rank-main {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+  }
+  #sheet .reviews-list .review-row .rv-social { margin-top: auto; }
+  #sheet .reviews-list .review-row + .review-row { margin-top: 0; }
+
+  /* üzemállapot: a visszajelzéssel azonos magasság, középre igazított figura */
+  #sheet .reports {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+  }
+  #sheet .reports-stage {
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+  }
+  #sheet .reports-fig { max-width: 300px; }
+  #sheet .reports-fig-hint { font-size: 11px; margin-top: 9px; }
+  #sheet .reports-hint { margin-top: 12px; }
+
+  /* állapot: bal oldalt a nyitvatartás, jobb oldalt a pontszám */
+  #sheet .sheet-status {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "head head"
+      "text side"
+      "sub  side"
+      "bar  side";
+    column-gap: 30px;
+    row-gap: 3px;
+    align-items: center;
+    padding: 15px 20px 17px;
+  }
+  #sheet .sheet-status-head {
+    grid-area: head;
+    align-self: start;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  #sheet .sheet-status-text { grid-area: text; }
+  #sheet .sheet-status-sub { grid-area: sub; }
+  #sheet .sheet-status-bar { grid-area: bar; height: 5px; margin-top: 10px; border-radius: 99px; }
+  #sheet .sheet-status-meta {
+    grid-area: side;
+    align-self: center;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    gap: 10px;
+    margin: 0;
+  }
+  #sheet .sheet-status-meta .sheet-community { white-space: nowrap; }
+
+  /* a megosztás-ablak is az oldal közepén */
+  .share-pop { place-items: center; padding: 0; }
+  .share-pop .share-box { width: min(560px, calc(100vw - 48px)); }
 }

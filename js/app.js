@@ -981,7 +981,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   var FAV_KEY = 'vissza.favorites.v1';
   var VISIT_KEY = 'vissza.visits.v1';
   var REPORT_KEY = 'vissza.reports.v1';      // helyi jelzésnapló (a "Segítő" jelvényhez)
-  var REPORT_TTL = 2 * 60 * 60 * 1000;      // a jelzés ennyi ideig érvényes
+  var REPORT_TTL = 1 * 60 * 60 * 1000;      // a jelzés ennyi ideig érvényes
 
   var REPORTS = {
     tele:  { label: 'Tele van',    past: 'tele van',    cls: 'is-tele' },
@@ -1042,13 +1042,18 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     toast(isFav(id) ? 'Kedvencekhez adva ★' : 'Eltávolítva a kedvencek közül');
   }
 
+  function paintFavBtn(btn, on) {
+    if (!btn) return;
+    btn.classList.toggle('is-fav', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('aria-label', on ? 'Eltávolítás a kedvencekből' : 'Hozzáadás a kedvencekhez');
+    btn.title = on ? 'Eltávolítás a kedvencekből' : 'Kedvencekhez';
+  }
+
   function refreshSheetFav() {
-    if (!el.sheetFav) return;
     var on = selectedId != null && isFav(selectedId);
-    el.sheetFav.classList.toggle('is-fav', on);
-    el.sheetFav.setAttribute('aria-pressed', on ? 'true' : 'false');
-    el.sheetFav.setAttribute('aria-label', on ? 'Eltávolítás a kedvencekből' : 'Hozzáadás a kedvencekhez');
-    el.sheetFav.title = el.sheetFav.getAttribute('aria-label');
+    paintFavBtn(el.sheetFav, on);
+    paintFavBtn(el.sheetFavPc, on);
   }
 
   /* --- üzemállapot --- */
@@ -1095,6 +1100,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         b.classList.toggle('is-on', !!meta && b.dataset.report === r.status);
       });
     }
+    if (el.reportFig) el.reportFig.dataset.state = meta ? r.status : 'none';
+    if (el.reportFigHint) {
+      el.reportFigHint.textContent = meta ? (meta.label + ' · ' + agoText(r.at)) : 'Koppints a jelzéshez';
+    }
     var c = selectedId != null ? communityOf(selectedId) : null;
     if (el.sheetCommunity) {
       if (c && c.votes) {
@@ -1127,7 +1136,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         if (!Array.isArray(log)) log = [];
         log.push(Date.now());
         writeJSON(REPORT_KEY, log.slice(-500));
-        toast('Köszönjük! A jelzés 2 óráig látszik.');
+        toast('Köszönjük! A jelzés 1 óráig látszik.');
         return refreshSocial();
       })
       .catch(function (e) { toast('A jelentés nem sikerült: ' + authErr(e)); });
@@ -3205,7 +3214,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     refreshSheetFav();
     refreshSheetSocial();
     refreshSheetRate();
-    if (el.shareBox) el.shareBox.hidden = true;
+    closeShare();
+    setHoursOpen(false);
+    setReportsOpen(false);
     loadPointReviews(p.id);
 
     var hrs = hoursOf(p);
@@ -3224,10 +3235,6 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.hoursToggle.setAttribute('aria-expanded', 'false');
     el.hoursToggle.textContent = 'Teljes nyitvatartás';
 
-    var ll = p.lat + ',' + p.lng;
-    el.navGoogle.href = NAV_GOOGLE + ll;
-    el.navWaze.href = NAV_WAZE + ll + '?navigate=yes';
-    el.navApple.href = NAV_APPLE + ll;
     el.sheetRoute.onclick = function () { closeSheet(); startRoute(p, null); };
     el.copyAddr.onclick = function () {
       var addr = addrText(p);
@@ -3240,11 +3247,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       }
     };
 
-    if (el.sheetShare) {
-      el.sheetShare.onclick = function () {
-        if (el.shareBox.hidden) renderShareBox(p.id); else el.shareBox.hidden = true;
-      };
-    }
+    if (el.sheetShare) el.sheetShare.onclick = function () { openShare(p.id); };
+    if (el.sheetSharePc) el.sheetSharePc.onclick = function () { openShare(p.id); };
 
     if (sheetCloseTimer) {
       clearTimeout(sheetCloseTimer);
@@ -3255,6 +3259,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.sheet.hidden = false;
     el.sheetScrim.hidden = false;
     el.sheet.scrollTop = 0;
+    setHeroMapLive(false);
     paintSheetMiniMap(p);
   }
 
@@ -3311,10 +3316,47 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     setTimeout(function () { if (miniMap) miniMap.resize(); }, 90);
   }
 
+  // a fejléc-térkép csak koppintásra válik mozgathatóvá (mint egy beágyazott térkép)
+  function setHeroMapLive(on) {
+    if (!el.sheetHero) return;
+    if (!miniMap) on = false;
+    if (on) {
+      miniMap.dragPan.enable();
+      miniMap.touchZoomRotate.enable();
+      miniMap.doubleClickZoom.enable();
+    } else if (miniMap) {
+      miniMap.dragPan.disable();
+      miniMap.touchZoomRotate.disable();
+      miniMap.doubleClickZoom.disable();
+    }
+    el.sheetHero.classList.toggle('is-map-live', !!on);
+    if (el.sheetMapHint) {
+      el.sheetMapHint.textContent = on ? 'Húzd a térképet · koppints ide a kikapcsoláshoz' : 'Koppints a térképhez';
+    }
+  }
+
+  // üzemállapot-jelző popover
+  function setReportsOpen(on) {
+    if (el.reportsPop) el.reportsPop.classList.toggle('is-open', !!on);
+    if (el.reportFig) {
+      el.reportFig.classList.toggle('is-open', !!on);
+      el.reportFig.setAttribute('aria-expanded', on ? 'true' : 'false');
+    }
+  }
+
+  function toggleReportsOpen() {
+    if (!el.reportsPop) return;
+    setReportsOpen(!el.reportsPop.classList.contains('is-open'));
+  }
+
   var sheetCloseTimer = null;
 
   function closeSheet() {
     if (el.sheet.hidden || sheetCloseTimer) return;
+    closeShare();
+    setHoursOpen(false);
+    setReportsOpen(false);
+    setHeroMapLive(false);
     el.sheet.classList.add('is-closing');
     el.sheetScrim.classList.add('is-closing');
     sheetCloseTimer = setTimeout(function () {
@@ -3335,7 +3377,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     if (kind === 'top') {
       el.overlayEyebrow.textContent = 'Ranglista';
-      el.overlayTitle.textContent = 'Legjobbra értékelt pontok';
+      el.overlayTitle.textContent = 'Legjobbra értékelt REpontok';
       if (!ids.length) {
         el.overlayBody.innerHTML = '<div class="overlay-empty">Még nincs értékelésed.<br>' +
           'Nyiss meg egy REpontot a térképen, és osztályozd 1–10-ig.</div>';
@@ -3998,14 +4040,48 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       e.stopPropagation();
       toggleFav(+favEl.dataset.fav);
     });
-    el.sheetFav.addEventListener('click', function () {
-      if (selectedId != null) toggleFav(selectedId);
+    [el.sheetFav, el.sheetFavPc].forEach(function (btn) {
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        if (selectedId != null) toggleFav(selectedId);
+      });
     });
-    el.reportBtns.addEventListener('click', function (e) {
-      var b = e.target.closest('[data-report]');
-      if (!b || selectedId == null) return;
-      sendReport(selectedId, b.dataset.report);
-    });
+    if (el.reportBtns) {
+      el.reportBtns.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-report]');
+        if (!b || selectedId == null) return;
+        sendReport(selectedId, b.dataset.report);
+        setReportsOpen(false);
+      });
+    }
+    if (el.reportFig) el.reportFig.addEventListener('click', toggleReportsOpen);
+
+    // megosztás-ablak
+    if (el.shareClose) el.shareClose.addEventListener('click', closeShare);
+    if (el.sharePopBack) el.sharePopBack.addEventListener('click', closeShare);
+
+    // nyitvatartás-ablak (PC-n középre igazított felugró ablak)
+    if (el.hoursOpen) el.hoursOpen.addEventListener('click', function () { setHoursOpen(true); });
+    if (el.hoursClose) el.hoursClose.addEventListener('click', function () { setHoursOpen(false); });
+    if (el.hoursBlock) {
+      el.hoursBlock.addEventListener('click', function (e) {
+        if (e.target === el.hoursBlock) setHoursOpen(false);
+      });
+    }
+
+    // fejléc-térkép: koppintásra mozgatható, újra koppintásra (vagy a tippre) visszazár
+    if (el.sheetHero) {
+      el.sheetHero.addEventListener('click', function (e) {
+        if (e.target.closest('button, a, .sheet-hero-top, .sheet-hero-body, .sheet-map-hint')) return;
+        setHeroMapLive(!el.sheetHero.classList.contains('is-map-live'));
+      });
+    }
+    if (el.sheetMapHint) {
+      el.sheetMapHint.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (el.sheetHero && el.sheetHero.classList.contains('is-map-live')) setHeroMapLive(false);
+      });
+    }
 
     // Overlay
     el.overlayClose.addEventListener('click', function () { closeOverlay(); setDock('dockMap'); });
@@ -4076,6 +4152,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         return;
       }
       if (e.key !== 'Escape') return;
+      if (el.sharePop && !el.sharePop.hidden) { closeShare(); return; }
+      if (el.hoursBlock && el.hoursBlock.classList.contains('is-popped')) { setHoursOpen(false); return; }
+      if (el.reportsPop && el.reportsPop.classList.contains('is-open')) { setReportsOpen(false); return; }
       if (!el.authView.hidden) { authClose(); return; }
       if (!el.overlay.hidden) { closeOverlay(); setDock('dockMap'); return; }
       if (!el.arrive.hidden) { el.arrive.hidden = true; stopNavigation(); return; }
@@ -4403,7 +4482,45 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         }
       }
     }
-    el.shareBox.hidden = false;
+    if (el.sharePop) el.sharePop.hidden = false;
+  }
+
+  function openShare(id) {
+    if (id == null) return;
+    renderShareBox(id);
+  }
+
+  function closeShare() {
+    if (el.sharePop && !el.sharePop.hidden) el.sharePop.hidden = true;
+  }
+
+  function setHoursOpen(on) {
+    if (!el.hoursBlock) return;
+    if (on && !el.hoursBlock.classList.contains('is-floating')) on = false;
+    el.hoursBlock.classList.toggle('is-popped', !!on);
+    if (el.hoursOpen) el.hoursOpen.setAttribute('aria-expanded', on ? 'true' : 'false');
+  }
+
+  // PC-n a nyitvatartás az oldal közepén nyílik: a blokk a body alá kerül (mobilon a lapban marad)
+  var hoursHome = null;
+  function placeHoursBlock() {
+    if (!el.hoursBlock) return;
+    var blk = el.hoursBlock;
+    if (window.innerWidth > 900) {
+      if (!hoursHome) hoursHome = { parent: blk.parentNode, next: blk.nextSibling };
+      if (blk.parentNode !== document.body) document.body.appendChild(blk);
+      blk.classList.add('is-floating');
+    } else {
+      blk.classList.remove('is-floating');
+      blk.classList.remove('is-popped');
+      if (hoursHome && blk.parentNode !== hoursHome.parent) {
+        hoursHome.parent.insertBefore(blk, hoursHome.next);
+      }
+    }
+  }
+
+  function closeHours() {
+    if (el.hoursBlock && el.hoursBlock.classList.contains('is-popped')) setHoursOpen(false);
   }
 
   function pointFromHash() {
@@ -5353,15 +5470,19 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'introView', 'introClose', 'introSlides', 'introDots', 'introNext', 'introRegister', 'introLogin', 'introGuest',
      'recentCard', 'recentName', 'recentMeta', 'recentGo',
 
-     'sheetFav', 'sheetCommunity', 'reportBtns', 'reportStatus',
-     'sheetShare', 'shareBox', 'shareTitle', 'shareQr', 'shareUrlText',
+     'sheetFav', 'sheetFavPc', 'sheetCommunity', 'reportBtns', 'reportStatus',
+     'reportFig', 'reportFigHint', 'reportsPop',
+     'sheetHero', 'sheetMapHint', 'sheetTopbar',
+     'hoursCard', 'hoursOpen', 'hoursClose',
+     'sheetShare', 'sheetSharePc', 'shareBox', 'sharePop', 'sharePopBack', 'shareClose',
+     'shareTitle', 'shareQr', 'shareUrlText',
      'shareCopy', 'shareNative', 'shareFriend',
      'reviewsBox', 'reviewsList', 'reviewsStatus',
      'sheet', 'sheetScrim', 'sheetType',
      'sheetName', 'sheetAddr', 'sheetDist', 'sheetRate', 'sheetHours', 'sheetMini',
      'sheetStatusBox', 'sheetStatusText', 'sheetStatusSub', 'sheetStatusBar',
      'hoursBlock', 'hoursToggle',
-     'sheetClose', 'sheetClosePc', 'sheetRoute', 'navGoogle', 'navWaze', 'navApple', 'copyAddr',
+     'sheetClose', 'sheetClosePc', 'sheetRoute', 'copyAddr',
      'toast', 'loader', 'statAll', 'statAuto', 'statKezi', 'toolFilter', 'toolLocate', 'tool3D', 'mapTip',
      'routeCard', 'routeClose', 'routeModes', 'routeDist', 'routeTime', 'routeName',
      'routeAddr', 'routeSteps', 'routeStepsToggle', 'routeStart', 'routeGo', 'routeDetail',
@@ -5376,7 +5497,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     initSocial();
     placeDock();
     syncDockPill();
-    window.addEventListener('resize', debounce(function () { placeDock(); syncDockPill(); }, 120));
+    window.addEventListener('resize', debounce(function () { placeDock(); syncDockPill(); placeHoursBlock(); }, 120));
+    placeHoursBlock();
     bindEvents();
     loadData();
   }

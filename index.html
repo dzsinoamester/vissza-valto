@@ -206,7 +206,7 @@
 
   <!-- Alsó dokk (telefon + tablet) -->
   <nav class="dock" id="dock" aria-label="Navigáció">
-    <button class="dock-btn" id="dockTop" type="button" title="Legjobbra értékelt pontok">
+    <button class="dock-btn" id="dockTop" type="button" title="Legjobbra értékelt REpontok">
       <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5.5h3V7a3 3 0 0 1-3 3M7 5.5H4V7a3 3 0 0 0 3 3"/></svg>
       <span class="dock-label">Ranglista</span>
     </button>
@@ -532,12 +532,21 @@
 <section class="sheet" id="sheet" hidden aria-modal="true" role="dialog">
   <div class="sheet-grip" aria-hidden="true"></div>
 
-  <button class="sheet-close-far" id="sheetClosePc" type="button" aria-label="Bezárás">✕</button>
+  <div class="sheet-topbar" id="sheetTopbar">
+    <button class="sheet-icon-btn" id="sheetFavPc" type="button" aria-pressed="false" aria-label="Hozzáadás a kedvencekhez" title="Kedvencekhez">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="sheet-icon-btn" id="sheetSharePc" type="button" aria-label="Megosztás (link, QR-kód)" title="Megosztás">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5.2" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="18.8" r="2.6"/><path d="M8.4 10.7 15.6 6.5M8.4 13.3l7.2 4.2"/></svg>
+    </button>
+    <button class="sheet-close-far" id="sheetClosePc" type="button" aria-label="Bezárás">✕</button>
+  </div>
 
   <div class="sheet-col sheet-col-a">
-  <div class="sheet-hero">
+  <div class="sheet-hero" id="sheetHero">
     <div class="sheet-mini" id="sheetMini" aria-hidden="true"></div>
     <div class="sheet-hero-fade" aria-hidden="true"></div>
+    <span class="sheet-map-hint" id="sheetMapHint">Koppints a térképhez</span>
     <span class="sheet-mini-credit" aria-hidden="true">© OpenStreetMap</span>
 
     <span class="sheet-pin" aria-hidden="true">
@@ -569,6 +578,13 @@
   </div>
 
   <div class="sheet-status is-open" id="sheetStatusBox">
+    <div class="sheet-status-head">
+      <span class="fb-eyebrow">Állapot</span>
+      <button class="status-hours-btn" id="hoursOpen" type="button" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.4V12l3.1 2"/></svg>
+        Nyitvatartás
+      </button>
+    </div>
     <span class="sheet-status-text" id="sheetStatusText">–</span>
     <span class="sheet-status-sub" id="sheetStatusSub"></span>
     <i class="sheet-status-bar" id="sheetStatusBar" aria-hidden="true"></i>
@@ -580,10 +596,14 @@
   </div>
 
   <div class="hours-block" id="hoursBlock">
-    <table class="hours" id="sheetHours">
-      <tbody></tbody>
-    </table>
-    <button class="hours-toggle" id="hoursToggle" type="button" aria-expanded="false">Teljes nyitvatartás</button>
+    <div class="hours-card" id="hoursCard" role="dialog" aria-modal="true" aria-label="Nyitvatartás">
+      <button class="hours-pop-close" id="hoursClose" type="button" aria-label="Nyitvatartás bezárása">✕</button>
+      <span class="fb-eyebrow">Nyitvatartás</span>
+      <table class="hours" id="sheetHours">
+        <tbody></tbody>
+      </table>
+      <button class="hours-toggle" id="hoursToggle" type="button" aria-expanded="false">Teljes nyitvatartás</button>
+    </div>
   </div>
 
   <div class="sheet-actions">
@@ -593,50 +613,62 @@
     </button>
   </div>
 
-  <div class="sheet-nav" role="group" aria-label="Megnyitás másik alkalmazásban">
-    <span class="sheet-nav-label">Megnyitás</span>
-    <a class="sheet-nav-btn" id="navGoogle" href="#" target="_blank" rel="noopener">Google<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 16 16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></a>
-    <a class="sheet-nav-btn" id="navWaze" href="#" target="_blank" rel="noopener">Waze<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 16 16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></a>
-    <a class="sheet-nav-btn" id="navApple" href="#" target="_blank" rel="noopener">Apple<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 16 16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></a>
-  </div>
-
   <!-- ============ Üzemállapot ============ -->
   <div class="reports" id="reportsBox">
     <div class="reports-head">
       <span class="fb-eyebrow">Üzemállapot</span>
       <span class="reports-status" id="reportStatus">Nincs friss jelzés</span>
     </div>
-    <div class="reports-actions" id="reportBtns" role="group" aria-label="Üzemállapot jelentése">
-      <button class="report-btn" data-report="tele" type="button">Tele van</button>
-      <button class="report-btn" data-report="urult" type="button">Kiürült</button>
-      <button class="report-btn" data-report="hibas" type="button">Nem fogadja</button>
+    <div class="reports-stage">
+      <button class="reports-fig" id="reportFig" type="button" data-state="none" aria-expanded="false" aria-controls="reportBtns" aria-label="Üzemállapot jelentése">
+        <svg class="rfig" viewBox="0 0 128 96" aria-hidden="true">
+          <defs>
+            <clipPath id="rfigWindow"><rect x="40" y="33" width="48" height="41" rx="9"/></clipPath>
+          </defs>
+          <ellipse class="rfig-shadow" cx="64" cy="90" rx="34" ry="4.5"/>
+          <rect class="rfig-body" x="24" y="9" width="80" height="77" rx="15"/>
+          <rect class="rfig-screen" x="39" y="17" width="50" height="12" rx="4"/>
+          <path class="rfig-screen-txt" d="M44 23h11M59 23h9M72 23h12"/>
+          <circle class="rfig-led" cx="96.5" cy="23" r="3"/>
+          <rect class="rfig-slot" x="52" y="6.5" width="24" height="5" rx="2.5"/>
+          <rect class="rfig-window" x="40" y="33" width="48" height="41" rx="9"/>
+          <g clip-path="url(#rfigWindow)">
+            <rect class="rfig-fill" x="40" y="38" width="48" height="36"/>
+            <g class="rfig-cans">
+              <rect x="46" y="64" width="7" height="12" rx="2"/>
+              <rect x="56" y="67" width="7" height="9" rx="2"/>
+              <rect x="66" y="62" width="7" height="14" rx="2"/>
+              <rect x="76" y="66" width="7" height="10" rx="2"/>
+            </g>
+          </g>
+          <g class="rfig-x" aria-hidden="true">
+            <circle cx="64" cy="53" r="13"/>
+            <path d="M58.5 47.5l11 11M69.5 47.5l-11 11"/>
+          </g>
+          <g class="rfig-bottle" aria-hidden="true">
+            <rect class="rfig-bottle-body" x="-5" y="-15" width="10" height="15" rx="3"/>
+            <rect class="rfig-bottle-neck" x="-2.6" y="-21" width="5.2" height="6.5" rx="1.4"/>
+            <rect class="rfig-bottle-cap" x="-3.6" y="-23.4" width="7.2" height="3" rx="1.4"/>
+          </g>
+        </svg>
+        <span class="reports-fig-hint" id="reportFigHint">Koppints a jelzéshez</span>
+      </button>
+
+      <div class="reports-pop" id="reportsPop">
+        <span class="reports-pop-title">Mi a helyzet a géppel?</span>
+        <div class="reports-actions" id="reportBtns" role="group" aria-label="Üzemállapot jelentése">
+          <button class="report-btn" data-report="tele" type="button"><i class="rb-dot"></i>Tele van</button>
+          <button class="report-btn" data-report="urult" type="button"><i class="rb-dot"></i>Kiürült</button>
+          <button class="report-btn" data-report="hibas" type="button"><i class="rb-dot"></i>Nem fogadja</button>
+        </div>
+      </div>
     </div>
-    <p class="sheet-note reports-hint">A jelzés 2 óráig érvényes, és mindenkinek látszik a térképen. Jelenteni bejelentkezve tudsz.</p>
+    <p class="sheet-note reports-hint">A jelzés 1 óráig látszik a térképen. Jelenteni bejelentkezve tudsz.</p>
   </div>
 
   </div>
 
   <div class="sheet-col sheet-col-b">
-
-  <!-- ============ Megosztás / QR-kód ============ -->
-  <div class="share-box" id="shareBox" hidden>
-    <div class="share-head">
-      <span class="fb-eyebrow">Megosztás</span>
-      <b id="shareTitle">–</b>
-    </div>
-    <div class="share-body">
-      <div class="share-qr" id="shareQr"></div>
-      <div class="share-main">
-        <small class="share-url" id="shareUrlText"></small>
-        <div class="share-actions">
-          <button class="btn btn-ghost" id="shareCopy" type="button">Link másolása</button>
-          <button class="btn btn-ghost" id="shareNative" type="button">Megosztás…</button>
-          <button class="btn btn-primary" id="shareFriend" type="button">Barátoknak</button>
-        </div>
-        <p class="share-hint">Olvasd be a QR-kódot, vagy küldd el egy barátodnak — a link a pont részleteit nyitja meg.</p>
-      </div>
-    </div>
-  </div>
 
   <!-- ============ Visszajelzés ============ -->
   <div class="feedback" id="feedback">
@@ -691,6 +723,30 @@
   </div>
   </div>
 </section>
+
+<!-- ============ Megosztás / QR-kód – külön felugró ablak ============ -->
+<div class="share-pop" id="sharePop" hidden>
+  <div class="share-pop-back" id="sharePopBack" aria-hidden="true"></div>
+  <div class="share-box" id="shareBox" role="dialog" aria-modal="true" aria-label="Megosztás">
+    <button class="share-pop-close" id="shareClose" type="button" aria-label="Megosztás bezárása">✕</button>
+    <div class="share-head">
+      <span class="fb-eyebrow">Megosztás</span>
+      <b id="shareTitle">–</b>
+    </div>
+    <div class="share-body">
+      <div class="share-qr" id="shareQr"></div>
+      <div class="share-main">
+        <small class="share-url" id="shareUrlText"></small>
+        <div class="share-actions">
+          <button class="btn btn-ghost" id="shareCopy" type="button">Link másolása</button>
+          <button class="btn btn-ghost" id="shareNative" type="button">Megosztás…</button>
+          <button class="btn btn-primary" id="shareFriend" type="button">Barátoknak</button>
+        </div>
+        <p class="share-hint">Olvasd be a QR-kódot, vagy küldd el egy barátodnak — a link a pont részleteit nyitja meg.</p>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast" hidden></div>
 
