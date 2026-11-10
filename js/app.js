@@ -50,6 +50,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     sosIndex: 0,
     watchId: null,
     route: null,          // { point, mode, dist, dur, steps, geojson }
+    garage: null,         // { current, list: [{ id, name, type, cons }] }
     fb: { score: 0, tags: [], note: '' }
   };
 
@@ -1856,6 +1857,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (selectedId != null) setSelected(selectedId);
     if (state.route) drawRouteLayer(state.route.geojson);
     bindLayerHandlers();
+    if (!onStyleLoad._rot) { onStyleLoad._rot = true; map.on('rotate', paintMe); }
     ready.style = true;
     startAnimations();
     if (pendingPlace) { var fn = pendingPlace; pendingPlace = null; fn(); }
@@ -2559,7 +2561,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   }
 
   function startRoute(p, mode, opts) {
-    mode = mode || (state.route && state.route.point === p ? state.route.mode : 'driving');
+    mode = mode || (state.route && state.route.point === p ? state.route.mode : vehicleMode());
 
     if (!state.me) {
       askLocation({ route: p.id, navigate: !!(opts && opts.navigate), mode: mode });
@@ -2577,6 +2579,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.routeAddr.textContent = addrText(p);
     el.routeDist.textContent = '…';
     el.routeTime.textContent = '…';
+    if (el.routeFuel) el.routeFuel.hidden = true;
     el.routeGo.href = NAV_GOOGLE + p.lat + ',' + p.lng;
     Array.prototype.forEach.call(el.routeModes.children, function (b) {
       b.classList.toggle('is-active', b.dataset.mode === mode);
@@ -2593,13 +2596,14 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     routeReq
       .then(function (rt) {
         state.route.dist = rt.distance;
-        state.route.dur = rt.duration;
+        state.route.dur = rt.duration * routeTimeFactor(mode);
         state.route.steps = rt.steps || null;
         state.route.geojson = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: rt.geometry, properties: {} }] };
 
         drawRouteLayer(state.route.geojson);
         el.routeDist.textContent = fmtDist(rt.distance);
-        el.routeTime.textContent = fmtDur(rt.duration);
+        el.routeTime.textContent = fmtDur(state.route.dur);
+        renderRouteFuel();
         el.routeSteps.innerHTML = routeStepsHtml(state.route.steps);
         el.routeStepsToggle.hidden = !(state.route.steps && state.route.steps.length > 3);
         el.routeSteps.hidden = true;
@@ -2623,6 +2627,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         state.route.dist = d;
         el.routeDist.textContent = fmtDist(d);
         el.routeTime.textContent = '–';
+        renderRouteFuel();
         el.routeSteps.innerHTML = '';
         el.routeStepsToggle.hidden = true;
         el.stepNav.hidden = true;
@@ -2966,6 +2971,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     var ahead = pointAtDistance(nav, Math.min(nav.total, pos.along + 70));
     var head = bearing(me.lat, me.lng, ahead[1], ahead[0]);
+    if (state.me) { state.me.heading = head; paintMe(); }
     try {
       map.easeTo({
         center: [me.lng, me.lat],
@@ -3400,6 +3406,161 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     document.body.classList.remove('is-page');
   }
 
+  /* ==================== garázs (járműválasztás) ==================== */
+
+  var GARAGE_KEY = 'vissza.garage.v1';
+  var FUEL_PRICE = 618;          // Ft/liter, tájékoztató átlagár
+
+  var V_TYPES = {
+    car:  { label: 'Autó',         icon: 'car',  mode: 'driving', cons: 6.5, timeFactor: 1,    def: 'Autóm' },
+    van:  { label: 'Kisteherautó', icon: 'van',  mode: 'driving', cons: 9.8, timeFactor: 1.12, def: 'Kisteherautó' },
+    bike: { label: 'Kerékpár',     icon: 'bike', mode: 'cycling', cons: 0,   timeFactor: 1,    def: 'Kerékpár' },
+    foot: { label: 'Gyalog',       icon: 'foot', mode: 'foot',    cons: 0,   timeFactor: 1,    def: 'Gyalog' }
+  };
+
+  var V_SVG = {
+    car: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 6.5A1.5 1.5 0 0 0 17.5 5h-11a1.5 1.5 0 0 0-1.4 1L3.2 12c-.4 1.4.2 2.9 1.5 3.4V19a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h8.6v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-3.6c1.3-.5 1.9-2 1.5-3.4l-1.9-5.5zM6.5 16A1.5 1.5 0 1 1 8 14.5 1.5 1.5 0 0 1 6.5 16zm11 0a1.5 1.5 0 1 1 1.5-1.5 1.5 1.5 0 0 1-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" fill="currentColor"/></svg>',
+    van: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 8.2A1.6 1.6 0 0 1 5 6.6h8.6l5.4 4.7v6.5a1 1 0 0 1-1 1h-1.4a2.5 2.5 0 0 0-5 0H8.2a2.5 2.5 0 0 0-5 0H4.4a1 1 0 0 1-1-1V8.2zM14 8v3.6h3.4L14 8z" fill="currentColor"/><circle cx="5.8" cy="18.6" r="1.6" fill="currentColor"/><circle cx="10.8" cy="18.6" r="1.6" fill="currentColor"/></svg>',
+    bike: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 5.5a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-3.6 4.5L9.4 6.9l1.2-2.1a3 3 0 0 0-1.1.3A5 5 0 1 0 14.4 16l-2.5-6zm-6.4 8A3.5 3.5 0 1 1 9 18.5 3.5 3.5 0 0 1 5.5 18zm13 0a3.5 3.5 0 1 1-3.5-3.5 3.5 3.5 0 0 1 3.5 3.5z" fill="currentColor"/></svg>',
+    foot: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 5.5a2 2 0 1 0-2-2 2 2 0 0 0 2 2zM9.8 22l1-5.5 2 2v5h2v-5.7l-2.1-2 .6-3A7.3 7.3 0 0 0 17 14v-2a5 5 0 0 1-3.8-2.4l-1-1.6a2 2 0 0 0-1.8-.9 2 2 0 0 0-1.7 1.3L7.2 12A4 4 0 0 0 9.4 15l-.8 7z" fill="currentColor"/></svg>'
+  };
+
+  function vType(v) { return (v && V_TYPES[v.type]) || V_TYPES.car; }
+
+  function defaultGarage() {
+    return {
+      current: 'v-car',
+      list: [
+        { id: 'v-car', name: 'Autóm', type: 'car', cons: 6.5 },
+        { id: 'v-van', name: 'Kisteherautó', type: 'van', cons: 9.8 },
+        { id: 'v-bike', name: 'Kerékpár', type: 'bike', cons: 0 },
+        { id: 'v-foot', name: 'Gyalog', type: 'foot', cons: 0 }
+      ]
+    };
+  }
+
+  function loadGarage() {
+    try {
+      var raw = localStorage.getItem(GARAGE_KEY);
+      if (!raw) return null;
+      var g = JSON.parse(raw);
+      if (!g || !Array.isArray(g.list)) return null;
+      g.list = g.list.filter(function (v) { return v && V_TYPES[v.type]; });
+      if (!g.list.length) return null;
+      if (!g.list.some(function (v) { return v.id === g.current; })) g.current = g.list[0].id;
+      return g;
+    } catch (e) { return null; }
+  }
+
+  function garageSeen() { try { return !!localStorage.getItem(GARAGE_KEY); } catch (e) { return false; } }
+
+  function garage() {
+    if (!state.garage) state.garage = loadGarage() || defaultGarage();
+    return state.garage;
+  }
+
+  function saveGarageStore(g) {
+    try { localStorage.setItem(GARAGE_KEY, JSON.stringify(g)); } catch (e) { }
+  }
+
+  function currentVehicle() {
+    var g = garage(), v = g.list[0];
+    g.list.forEach(function (x) { if (x.id === g.current) v = x; });
+    return v || null;
+  }
+
+  function vehicleMode() {
+    var v = currentVehicle();
+    return v ? vType(v).mode : 'driving';
+  }
+
+  // a kisteherautó kicsit lassabb, mint az OSRM autós becslése
+  function routeTimeFactor(mode) {
+    var v = currentVehicle();
+    if (!v || mode !== 'driving') return 1;
+    return vType(v).timeFactor || 1;
+  }
+
+  function fuelText(distM) {
+    var v = currentVehicle();
+    if (!v) return '';
+    var cons = Number(v.cons) || 0;
+    if (!cons || !distM) return '';
+    var liters = distM / 1000 * cons / 100;
+    var ft = Math.round(liters * FUEL_PRICE);
+    var ltxt = (liters < 1 ? (Math.round(liters * 100) / 100).toFixed(2) : (Math.round(liters * 10) / 10).toFixed(1)).replace('.', ',');
+    return '≈ <b>' + ft.toLocaleString('hu-HU') + ' Ft</b> üzemanyag <span>· ' + ltxt + ' l · ' + esc(v.name) + '</span>';
+  }
+
+  function renderRouteFuel() {
+    if (!el.routeFuel) return;
+    var txt = (state.route && state.route.dist) ? fuelText(state.route.dist) : '';
+    el.routeFuel.innerHTML = txt;
+    el.routeFuel.hidden = !txt;
+  }
+
+  function applyGarageUI() {
+    var v = currentVehicle();
+    if (el.garageChipIco) el.garageChipIco.innerHTML = v ? V_SVG[vType(v).icon] : '';
+    if (el.garageChipName) el.garageChipName.textContent = v ? v.name : 'Jármű';
+    if (state.me) placeMeMarker();
+    renderRouteFuel();
+  }
+
+  function renderGarage() {
+    if (!el.garageList) return;
+    var g = garage();
+    el.garageList.innerHTML = g.list.map(function (v) {
+      var t = vType(v), on = v.id === g.current;
+      return '<div class="gv' + (on ? ' is-on' : '') + '" data-vid="' + esc(v.id) + '" role="radio" aria-checked="' + (on ? 'true' : 'false') + '" tabindex="0">' +
+        '<span class="gv-ico" aria-hidden="true">' + (V_SVG[t.icon] || '') + '</span>' +
+        '<span class="gv-main">' +
+          '<input class="gv-name" data-f="name" value="' + esc(v.name) + '" maxlength="24" aria-label="Jármű neve">' +
+          '<span class="gv-sub">' + esc(t.label) + '</span>' +
+        '</span>' +
+        (t.cons
+          ? '<span class="gv-cons"><input class="gv-num" data-f="cons" type="number" min="0" max="40" step="0.1" value="' + esc(String(v.cons || 0)) + '" aria-label="Fogyasztás (l/100 km)"><i>l/100 km</i></span>'
+          : '') +
+        '<button class="gv-del" type="button" data-del="' + esc(v.id) + '" aria-label="Jármű törlése"' + (g.list.length < 2 ? ' hidden' : '') + '>✕</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  function openGarage() {
+    if (!el.garage) return;
+    renderGarage();
+    el.garage.hidden = false;
+    document.body.classList.add('is-garage');
+  }
+
+  function closeGarage(save) {
+    if (!el.garage || el.garage.hidden) return;
+    if (save) {
+      saveGarageStore(garage());
+      applyGarageUI();
+    }
+    el.garage.hidden = true;
+    document.body.classList.remove('is-garage');
+  }
+
+  function garageAdd() {
+    var g = garage();
+    var base = currentVehicle();
+    var type = base ? base.type : 'car';
+    var t = V_TYPES[type];
+    var v = { id: 'v' + Date.now().toString(36), name: t.def + ' ' + (g.list.length + 1), type: type, cons: t.cons };
+    g.list.push(v);
+    g.current = v.id;
+    renderGarage();
+    var inp = el.garageList.querySelector('[data-vid="' + v.id + '"] .gv-name');
+    if (inp) { inp.focus(); inp.select(); }
+  }
+
+  function maybeFirstGarage() {
+    if (garageSeen() || !el.garage || !el.garage.hidden) return;
+    openGarage();
+  }
+
   /* ==================== geolokáció ==================== */
 
   var pendingRoute = null;   // { id, navigate }
@@ -3424,23 +3585,64 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
   }
 
+  // felülnézeti autó-sziluett (a menetirányba fordul)
+  function carTopSvg(isVan) {
+    var body = isVan
+      ? 'M15 2.2c4.9 0 8.2 2.9 8.2 7.6v26.4c0 4.7-3.3 7.6-8.2 7.6s-8.2-2.9-8.2-7.6V9.8c0-4.7 3.3-7.6 8.2-7.6Z'
+      : 'M15 2c5.4 0 9 3.4 9 8.6v24.8c0 5.2-3.6 8.6-9 8.6s-9-3.4-9-8.6V10.6C6 5.4 9.6 2 15 2Z';
+    return '<svg viewBox="0 0 30 46" width="28" height="43" aria-hidden="true">' +
+      '<path class="mc-wheel" d="M6.1 10.4h2.2v6.6H6.1zm15.6 0h2.2v6.6h-2.2zM6.1 29h2.2v6.6H6.1zm15.6 0h2.2v6.6h-2.2z"/>' +
+      '<path class="mc-body" d="' + body + '"/>' +
+      (isVan
+        ? '<path class="mc-glass" d="M15 7.4c3.2 0 5.2 2 5.2 5v4.4H9.8v-4.4c0-3 2-5 5.2-5Z"/>' +
+          '<path class="mc-roof" d="M10.4 24.6h9.2"/>'
+        : '<path class="mc-glass" d="M15 7.2c3.2 0 5.4 2 5.4 5.2v4.6H9.6v-4.6c0-3.2 2.2-5.2 5.4-5.2Z"/>' +
+          '<path class="mc-glass" d="M9.9 31h10.2v3.6c0 2.4-2 4-5.1 4s-5.1-1.6-5.1-4z"/>') +
+      '</svg>';
+  }
+
   function meDot() {
+    var t = vType(currentVehicle());
     var d = document.createElement('div');
-    d.className = 'me-dot';
+    if (!t || t.icon === 'foot') { d.className = 'me-dot'; return d; }
+    if (t.icon === 'bike') { d.className = 'me-dot is-bike'; return d; }
+    d.className = 'me-car' + (t.icon === 'van' ? ' is-van' : '');
+    d.innerHTML = '<span class="me-car-rot">' +
+      '<span class="me-car-beam" aria-hidden="true"></span>' +
+      carTopSvg(t.icon === 'van') +
+      '<span class="me-car-brake" aria-hidden="true"></span>' +
+      '</span>';
     return d;
   }
 
+  // a jelölő a haladási irányba fordul (a térkép bearingjét kivonva)
+  function paintMe() {
+    if (!meMarker || !state.me) return;
+    var node = meMarker.getElement();
+    if (!node || !node.classList.contains('me-car')) return;
+    var head = (state.me.heading == null) ? 0 : state.me.heading;
+    var rot = head - (map ? map.getBearing() : 0);
+    node.style.setProperty('--head', rot.toFixed(1) + 'deg');
+    node.classList.toggle('is-brake', !!state.me.brake);
+  }
+
+  function placeMeMarker() {
+    if (!state.me || !map) return;
+    if (meMarker) meMarker.remove();
+    meMarker = new maplibregl.Marker({ element: meDot(), anchor: 'center' })
+      .setLngLat([state.me.lng, state.me.lat])
+      .addTo(map);
+    paintMe();
+  }
+
   function setMe(lat, lng, why) {
-    state.me = { lat: lat, lng: lng };
+    state.me = { lat: lat, lng: lng, heading: null, brake: false };
     state.points.forEach(function (p) { p._d = dist(lat, lng, p.lat, p.lng); });
 
     if (why !== 'sos' && why !== 'route') { applyFilters(); }
 
     var place = function () {
-      if (meMarker) meMarker.remove();
-      meMarker = new maplibregl.Marker({ element: meDot(), anchor: 'center' })
-        .setLngLat([lng, lat])
-        .addTo(map);
+      placeMeMarker();
 
       if (why === 'sos') { startSos(); return; }
 
@@ -3465,8 +3667,23 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   function startWatch() {
     if (state.watchId != null || !navigator.geolocation) return;
     state.watchId = navigator.geolocation.watchPosition(function (pos) {
-      state.me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      var c = pos.coords;
+      var prev = state.me;
+      var heading = (c.heading != null && !isNaN(c.heading)) ? c.heading : null;
+      var speed = (c.speed != null && !isNaN(c.speed)) ? c.speed : null;
+
+      state.me = { lat: c.latitude, lng: c.longitude, heading: null, brake: false };
+      // ha a GPS nem ad irányt, a korábbi pozícióból számoljuk
+      if (heading == null && prev && prev.lat != null) {
+        var moved = dist(prev.lat, prev.lng, c.latitude, c.longitude);
+        if (moved > 4) heading = bearing(prev.lat, prev.lng, c.latitude, c.longitude);
+        else if (prev.heading != null) heading = prev.heading;
+      }
+      state.me.heading = heading;
+      state.me.brake = (speed != null) ? speed < 0.6 : false;
+
       if (meMarker) meMarker.setLngLat([state.me.lng, state.me.lat]);
+      paintMe();
       state.points.forEach(function (p) { p._d = dist(state.me.lat, state.me.lng, p.lat, p.lng); });
       if (!el.sosView.hidden) showSos();
       if (nav) navUpdate(state.me);
@@ -3818,6 +4035,63 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       var b = e.target.closest('.rmode');
       if (!b || !state.route) return;
       startRoute(state.route.point, b.dataset.mode);
+    });
+
+    /* --- garázs --- */
+    if (el.garageOpen) el.garageOpen.addEventListener('click', openGarage);
+    if (el.garageSave) el.garageSave.addEventListener('click', function () {
+      closeGarage(true);
+      var v = currentVehicle();
+      if (v) toast('Innentől ' + v.name.toLowerCase() + ' tervezünk');
+    });
+    if (el.garageAdd) el.garageAdd.addEventListener('click', garageAdd);
+    if (el.garageClose) el.garageClose.addEventListener('click', function () { closeGarage(true); });
+    if (el.garageBack) el.garageBack.addEventListener('click', function () { closeGarage(true); });
+
+    if (el.garageList) {
+      el.garageList.addEventListener('input', function (e) {
+        var inp = e.target.closest('[data-f]');
+        if (!inp) return;
+        var row = inp.closest('[data-vid]');
+        if (!row) return;
+        var g = garage(), v = null;
+        g.list.forEach(function (x) { if (x.id === row.dataset.vid) v = x; });
+        if (!v) return;
+        if (inp.dataset.f === 'name') v.name = inp.value.slice(0, 24);
+        else v.cons = Math.max(0, Math.min(40, Number(inp.value) || 0));
+      });
+
+      el.garageList.addEventListener('click', function (e) {
+        var del = e.target.closest('[data-del]');
+        var g = garage();
+        if (del) {
+          var id = del.dataset.del;
+          g.list = g.list.filter(function (x) { return x.id !== id; });
+          if (!g.list.length) g.list = defaultGarage().list;
+          if (!g.list.some(function (x) { return x.id === g.current; })) g.current = g.list[0].id;
+          renderGarage();
+          return;
+        }
+        if (e.target.closest('input, button')) return;
+        var row = e.target.closest('[data-vid]');
+        if (!row) return;
+        g.current = row.dataset.vid;
+        renderGarage();
+      });
+
+      el.garageList.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        if (e.target.closest('input, button')) return;
+        var row = e.target.closest('[data-vid]');
+        if (!row) return;
+        e.preventDefault();
+        garage().current = row.dataset.vid;
+        renderGarage();
+      });
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && el.garage && !el.garage.hidden) closeGarage(true);
     });
     el.routeStepsToggle.addEventListener('click', function () {
       var open = el.routeSteps.hidden;
@@ -5455,6 +5729,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'sheetClose', 'sheetClosePc', 'sheetRoute', 'copyAddr',
      'toast', 'loader', 'statAll', 'statAuto', 'statKezi', 'toolFilter', 'toolLocate', 'tool3D', 'mapTip',
      'routeCard', 'routeClose', 'routeModes', 'routeDist', 'routeTime', 'routeName',
+     'routeFuel', 'garage', 'garageBack', 'garageClose', 'garageList', 'garageAdd', 'garageSave',
+     'garageOpen', 'garageChipIco', 'garageChipName',
      'routeAddr', 'routeSteps', 'routeStepsToggle', 'routeStart', 'routeGo', 'routeDetail',
      'stepNav', 'stepPrev', 'stepNext', 'stepLabel', 'stepReset',
      'feedback', 'fbScores', 'fbTags', 'fbNote', 'fbSend', 'fbDelete', 'fbDone',
@@ -5470,6 +5746,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     window.addEventListener('resize', debounce(function () { placeDock(); syncDockPill(); placeHoursBlock(); }, 120));
     placeHoursBlock();
     bindEvents();
+    applyGarageUI();
+    window.__t = { setMe: setMe, startRoute: startRoute, paintMe: paintMe, state: state, map: function () { return map; } }; // TEMP-DEBUG
+    setTimeout(maybeFirstGarage, 1500);
     loadData();
   }
 

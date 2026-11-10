@@ -2448,6 +2448,7 @@ body.is-nav .stage > .dock { display: none; }
 .map-tip .tip-d { color: var(--lime); font-weight: 700; }
 @media (prefers-reduced-motion: reduce) {
   .map-tip { transition: none; }
+  .me-dot { animation: none; }
 }
 
 /* ===================== Reszponzív ===================== */
@@ -2461,6 +2462,18 @@ body.is-nav .stage > .dock { display: none; }
   box-shadow: 0 0 0 3px rgba(216, 224, 47, .9), 0 0 22px rgba(216, 224, 47, .9);
   position: relative;
   animation: mePulse 2.4s ease-out infinite;
+}
+/* lágy árnyék a pötty alatt, hogy ne „lebegjen” a térkép fölött */
+.me-dot::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: calc(100% + 1px);
+  width: 24px; height: 9px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, .5), rgba(0, 0, 0, 0) 72%);
+  filter: blur(2px);
+  pointer-events: none;
 }
 @keyframes mePulse {
   0%   { box-shadow: 0 0 0 3px rgba(216, 224, 47, .9), 0 0 0 4px rgba(216, 224, 47, .5), 0 0 22px rgba(216, 224, 47, .9); }
@@ -6611,3 +6624,211 @@ body.is-nav .stage > .dock { display: none; }
   .share-pop { place-items: center; padding: 0; }
   .share-pop .share-box { width: min(560px, calc(100vw - 48px)); }
 }
+
+/* ===================== Garázs – járműválasztás ===================== */
+
+.garage { position: fixed; inset: 0; z-index: 1600; display: grid; place-items: center; padding: 16px; }
+.garage[hidden] { display: none; }
+.garage-back {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 4, 5, .60);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: fade .22s ease;
+}
+.garage-box {
+  position: relative;
+  z-index: 1;
+  width: min(520px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  background: linear-gradient(180deg, rgba(20, 22, 19, .97), rgba(6, 7, 8, .99));
+  box-shadow: 0 60px 130px -50px #000, inset 0 1px 0 rgba(255, 255, 255, .1);
+  animation: shareIn .3s cubic-bezier(.2, .9, .3, 1) both;
+}
+.garage-head b {
+  display: block;
+  font-family: var(--display);
+  font-size: 24px;
+  letter-spacing: -.6px;
+  margin: 6px 0 6px;
+}
+.garage-sub { font-size: 12.5px; line-height: 1.5; color: var(--ink-3); margin: 0 0 16px; max-width: 40ch; }
+
+.garage-list { display: flex; flex-direction: column; gap: 8px; }
+.gv {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .04);
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease;
+}
+.gv:hover { background: rgba(255, 255, 255, .07); }
+.gv.is-on {
+  border-color: rgba(216, 224, 47, .55);
+  background: linear-gradient(120deg, rgba(216, 224, 47, .14), rgba(216, 224, 47, .03));
+  box-shadow: 0 12px 28px -20px rgba(216, 224, 47, .9);
+}
+.gv-ico {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px; height: 34px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .06);
+  color: var(--ink-2);
+}
+.gv.is-on .gv-ico { background: rgba(216, 224, 47, .18); color: var(--lime); }
+.gv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.gv-name {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+}
+.gv-name:focus { outline: none; border-bottom-color: rgba(216, 224, 47, .5); }
+.gv-sub {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.gv-cons { display: flex; align-items: baseline; gap: 4px; flex: 0 0 auto; }
+.gv-num {
+  width: 54px;
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, .35);
+  color: var(--ink);
+  font-size: 12.5px;
+  text-align: right;
+}
+.gv-cons i { font-style: normal; font-size: 9.5px; letter-spacing: .4px; color: var(--ink-3); }
+.gv-del {
+  flex: 0 0 auto;
+  width: 26px; height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 11px;
+  cursor: pointer;
+}
+.gv-del:hover { color: #FF6B5E; border-color: rgba(255, 107, 94, .35); background: rgba(255, 107, 94, .08); }
+.gv-del[hidden] { display: none; }
+
+.garage-foot { display: flex; gap: 8px; margin-top: 16px; }
+.garage-foot .btn { flex: 1; }
+
+/* jármű-címke az útvonal-kártyán */
+.garage-chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px 5px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .05);
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color .16s ease, border-color .16s ease, background .16s ease;
+}
+.garage-chip:hover { color: var(--ink); border-color: rgba(216, 224, 47, .45); background: rgba(216, 224, 47, .08); }
+.garage-chip-ico { display: grid; place-items: center; width: 16px; height: 16px; color: var(--lime); }
+.garage-chip-ico svg { width: 16px; height: 16px; }
+.route-head { gap: 8px; }
+
+/* üzemanyag-sor az útvonal alatt */
+.route-fuel {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: -2px 0 14px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(216, 224, 47, .055);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.route-fuel[hidden] { display: none; }
+.route-fuel b { font-family: var(--display); font-size: 15px; color: var(--lime); letter-spacing: -.2px; }
+.route-fuel span { color: var(--ink-3); }
+
+@media (max-width: 900px) {
+  .garage { padding: 10px; }
+  .garage-box { width: 100%; border-radius: 22px; }
+  .garage-head b { font-size: 21px; }
+  .gv-cons i { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gv, .garage-chip, .me-car-rot { transition: none; }
+  .me-car-beam { filter: blur(4px); }
+}
+
+/* ===================== Autó mint élő jelölő ===================== */
+
+.me-car { position: relative; width: 28px; height: 43px; }
+.me-car-rot {
+  position: absolute;
+  inset: 0;
+  transform: rotate(var(--head, 0deg));
+  transform-origin: 50% 58%;
+  transition: transform .5s ease-out;
+  will-change: transform;
+}
+/* fényszóró-kúp a haladási irányba (éjszakai térkép) */
+.me-car-beam {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 10px);
+  width: 132px;
+  height: 104px;
+  transform: translateX(-50%);
+  background: radial-gradient(58% 88% at 50% 100%, rgba(255, 244, 200, .30), rgba(255, 244, 200, .11) 46%, rgba(255, 244, 200, 0) 72%);
+  filter: blur(7px);
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.me-car svg { position: relative; display: block; }
+.mc-body { fill: #E8EEF2; stroke: #06090C; stroke-width: 2.2; }
+.mc-glass { fill: #18222C; }
+.me-car.is-van .mc-body { fill: #D6E0E6; }
+/* féklámpa */
+.me-car-brake {
+  position: absolute;
+  left: 6px; right: 6px; bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background .12s ease, box-shadow .12s ease;
+}
+.me-car.is-brake .me-car-brake {
+  background: #FF3B30;
+  box-shadow: 0 0 12px 3px rgba(255, 59, 48, .85);
+}
+
+.mc-wheel { fill: #0A0E12; }
+.mc-roof { stroke: rgba(10, 14, 18, .55); stroke-width: 1.4; stroke-linecap: round; fill: none; }

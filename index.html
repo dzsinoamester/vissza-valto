@@ -122,6 +122,10 @@
   <div class="route-card" id="routeCard" hidden>
     <div class="route-head">
       <span class="route-eyebrow">Útvonal</span>
+      <button class="garage-chip" id="garageOpen" type="button" aria-label="Jármű kiválasztása">
+        <span class="garage-chip-ico" id="garageChipIco" aria-hidden="true"></span>
+        <span id="garageChipName">Autó</span>
+      </button>
       <button class="route-close" id="routeClose" type="button" aria-label="Útvonal bezárása">✕</button>
     </div>
 
@@ -150,6 +154,8 @@
         <span>becsült idő</span>
       </div>
     </div>
+
+    <div class="route-fuel" id="routeFuel" hidden></div>
 
     <div class="route-to">
       <span class="route-to-dot"></span>
@@ -744,6 +750,24 @@
         </div>
         <p class="share-hint">Olvasd be a QR-kódot, vagy küldd el egy barátodnak — a link a pont részleteit nyitja meg.</p>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Garázs – járműválasztás ============ -->
+<div class="garage" id="garage" hidden>
+  <div class="garage-back" id="garageBack" aria-hidden="true"></div>
+  <div class="garage-box" role="dialog" aria-modal="true" aria-labelledby="garageTitle">
+    <button class="share-pop-close" id="garageClose" type="button" aria-label="Bezárás">✕</button>
+    <div class="garage-head">
+      <span class="fb-eyebrow">Garázs</span>
+      <b id="garageTitle">Mivel jársz?</b>
+      <p class="garage-sub">A járművedhez igazítjuk az útvonalat, a becsült időt és az üzemanyagköltséget.</p>
+    </div>
+    <div class="garage-list" id="garageList" role="radiogroup" aria-label="Járművek"></div>
+    <div class="garage-foot">
+      <button class="btn btn-ghost" id="garageAdd" type="button">Új jármű</button>
+      <button class="btn btn-primary" id="garageSave" type="button">Ez az enyém</button>
     </div>
   </div>
 </div>
