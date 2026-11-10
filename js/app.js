@@ -425,9 +425,22 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       if (sc) el.fbRange.value = sc;
       el.fbRange.setAttribute('aria-valuetext', sc ? sc + ' / 10 pont' : 'nincs kiválasztva');
     }
-    if (el.fbScale) el.fbScale.classList.toggle('is-empty', !sc);
+    if (el.fbScale) {
+      el.fbScale.classList.toggle('is-empty', !sc);
+      // a PC-s színes skála színét/kitöltését ezek a változók vezérlik
+      el.fbScale.style.setProperty('--val', String(sc));
+      el.fbScale.style.setProperty('--p', (sc * 10) + '%');
+      el.fbScale.style.setProperty('--hue', (8 + sc * 7) + 'deg');
+      if (sc && sc !== fbShownScore) {
+        fbShownScore = sc;
+        el.fbScale.classList.remove('is-bump');
+        void el.fbScale.offsetWidth;
+        el.fbScale.classList.add('is-bump');
+      }
+    }
   }
 
+  var fbShownScore = 0;
   var hoverScore = 0;
 
   function loadFbIntoUI(id) {
@@ -3233,8 +3246,15 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       };
     }
 
+    if (sheetCloseTimer) {
+      clearTimeout(sheetCloseTimer);
+      sheetCloseTimer = null;
+    }
+    el.sheet.classList.remove('is-closing');
+    el.sheetScrim.classList.remove('is-closing');
     el.sheet.hidden = false;
     el.sheetScrim.hidden = false;
+    el.sheet.scrollTop = 0;
     paintSheetMiniMap(p);
   }
 
@@ -3291,9 +3311,19 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     setTimeout(function () { if (miniMap) miniMap.resize(); }, 90);
   }
 
+  var sheetCloseTimer = null;
+
   function closeSheet() {
-    el.sheet.hidden = true;
-    el.sheetScrim.hidden = true;
+    if (el.sheet.hidden || sheetCloseTimer) return;
+    el.sheet.classList.add('is-closing');
+    el.sheetScrim.classList.add('is-closing');
+    sheetCloseTimer = setTimeout(function () {
+      sheetCloseTimer = null;
+      el.sheet.hidden = true;
+      el.sheetScrim.hidden = true;
+      el.sheet.classList.remove('is-closing');
+      el.sheetScrim.classList.remove('is-closing');
+    }, 270);
   }
 
   /* ==================== ranglista / profil ==================== */
@@ -3618,14 +3648,13 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     } else {
       if (el.dock.parentNode !== topbar) topbar.insertBefore(el.dock, stats);
       if (sos.parentNode !== topbar) topbar.appendChild(sos);
-      document.body.classList.remove('is-search');
       el.panel.classList.remove('is-expanded');
     }
   }
 
   // Mobilon a keresőpanel alapból rejtve van, csak a Keresés gombra jön be
   function setSearchOpen(open) {
-    var on = !!open && isMobile();
+    var on = !!open;
     document.body.classList.toggle('is-search', on);
     if (!on) el.panel.classList.remove('is-expanded');
     setTimeout(function () { map.resize(); }, 340);
@@ -3886,8 +3915,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.dockProfile.addEventListener('click', function () { setSearchOpen(false); openOverlay('profile'); setDock('dockProfile'); });
     el.dockSearch.addEventListener('click', function () {
       closeOverlay();
-      // mobilon: újabb koppintás a Keresésre bezárja a panelt
-      if (isMobile() && document.body.classList.contains('is-search') && el.dockSearch.classList.contains('is-active')) {
+      // újabb kattintás a Keresésre bezárja a panelt (minden nézetben)
+      if (document.body.classList.contains('is-search') && el.dockSearch.classList.contains('is-active')) {
         setSearchOpen(false);
         setDock('dockMap');
         return;
@@ -4036,6 +4065,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     }
 
     el.sheetClose.addEventListener('click', closeSheet);
+    if (el.sheetClosePc) el.sheetClosePc.addEventListener('click', closeSheet);
     el.sheetScrim.addEventListener('click', closeSheet);
 
     document.addEventListener('keydown', function (e) {
@@ -5331,7 +5361,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'sheetName', 'sheetAddr', 'sheetDist', 'sheetRate', 'sheetHours', 'sheetMini',
      'sheetStatusBox', 'sheetStatusText', 'sheetStatusSub', 'sheetStatusBar',
      'hoursBlock', 'hoursToggle',
-     'sheetClose', 'sheetRoute', 'navGoogle', 'navWaze', 'navApple', 'copyAddr',
+     'sheetClose', 'sheetClosePc', 'sheetRoute', 'navGoogle', 'navWaze', 'navApple', 'copyAddr',
      'toast', 'loader', 'statAll', 'statAuto', 'statKezi', 'toolFilter', 'toolLocate', 'tool3D', 'mapTip',
      'routeCard', 'routeClose', 'routeModes', 'routeDist', 'routeTime', 'routeName',
      'routeAddr', 'routeSteps', 'routeStepsToggle', 'routeStart', 'routeGo', 'routeDetail',

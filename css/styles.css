@@ -5549,3 +5549,396 @@ body.is-nav .stage > .dock { display: none; }
   .intro-slide--cta .intro-actions { grid-column: 1; grid-row: 4; margin-top: 18px; max-width: 400px; }
   .intro-slide--cta .intro-note { text-align: left; }
 }
+
+/* ===== v4: kereső kattintásra, PC popup részletek, animációk ===== */
+
+/* a lap két hasába csomagolt tartalma mobilon változatlan folyású */
+.sheet-col { display: contents; }
+
+/* --- 1) Keresőpanel minden nézetben csak a Keresés gombra nyílik --- */
+@media (min-width: 901px) {
+  .panel {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(-18px) scale(.985);
+    transform-origin: left center;
+  }
+  body.is-search .panel {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    animation: panelIn .38s cubic-bezier(.2, .9, .3, 1) both;
+  }
+  @keyframes panelIn {
+    from { opacity: 0; transform: translateX(-18px) scale(.985); }
+    to { opacity: 1; transform: none; }
+  }
+  body.is-search .panel .search-block { animation: riseIn .4s .05s cubic-bezier(.2, .9, .3, 1) both; }
+  body.is-search .panel .list { animation: riseIn .44s .1s cubic-bezier(.2, .9, .3, 1) both; }
+}
+
+/* --- 2) Részletek: PC-n két hasábos popup, görgetés nélkül --- */
+@media (min-width: 901px) {
+  #sheet {
+    display: grid;
+    grid-template-columns: minmax(0, 372px) minmax(0, 1fr);
+    column-gap: 30px;
+    align-items: start;
+    width: min(1080px, 94vw);
+    max-height: 94vh;
+    row-gap: 12px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 22px 30px 22px;
+    --sheet-px: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, .16) transparent;
+  }
+  #sheet .sheet-grip { display: none; }
+  .sheet-col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    max-height: calc(92vh - 48px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, .16) transparent;
+  }
+  .sheet-col::-webkit-scrollbar { width: 6px; }
+  .sheet-col::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .16); border-radius: 99px; }
+  #sheet .sheet-hero { margin: 0; height: 148px; border-radius: 22px; }
+  #sheet .reports { padding: 13px 15px; }
+  #sheet .hours-toggle { margin-top: 6px; padding: 8px 12px; }
+  #sheet .sheet-hero-body { left: 16px; right: 16px; bottom: 14px; }
+  #sheet .sheet-hero h2 { font-size: 26px; }
+  #sheet .sheet-status,
+  #sheet .hours-block,
+  #sheet .sheet-actions,
+  #sheet .sheet-nav,
+  #sheet .reports,
+  #sheet .feedback,
+  #sheet .reviews,
+  #sheet .sheet-col-b > .sheet-note { margin: 0; }
+  #sheet .sheet-status-text { font-size: 20px; }
+  #sheet .feedback { padding: 16px 18px 18px; border-radius: 20px; }
+  #sheet .fb-head h3 { font-size: 19px; }
+  #sheet .fb-scale { padding-top: 4px; }
+  #sheet .fb-note { min-height: 46px; }
+  #sheet .fb-head { margin-bottom: 2px; }
+}
+
+@media (min-width: 1120px) {
+  #sheet {
+    grid-template-columns: minmax(0, 336px) minmax(0, 1fr) minmax(0, 288px);
+    column-gap: 24px;
+    width: min(1160px, 95vw);
+  }
+  /* a jobb hasáb tartalma a lap saját rácsába kerül: visszajelzés középen, értékelések jobbra */
+  .sheet-col-b { display: contents; }
+  #sheet .feedback { grid-column: 2; grid-row: 1; align-self: start; }
+  #sheet .reviews {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: start;
+    max-height: calc(90vh - 260px);
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  #sheet .sheet-col-b > .sheet-note { grid-column: 2; grid-row: 2; align-self: start; }
+  #sheet .share-box { grid-column: 2 / -1; grid-row: 3; align-self: start; }
+  #sheet .reviews { grid-row: 1 / span 2; }
+}
+
+/* --- 3) Animációk --- */
+@keyframes sheetIn { from { transform: translate(-50%, 104%); } to { transform: translate(-50%, 0); } }
+@keyframes sheetOut { from { transform: translate(-50%, 0); opacity: 1; } to { transform: translate(-50%, 104%); opacity: .5; } }
+@keyframes scrimIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scrimOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes riseIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+.sheet-scrim { animation: scrimIn .26s ease both; }
+.sheet-scrim.is-closing { animation: scrimOut .24s ease both; }
+
+@media (max-width: 900px) {
+  .sheet { animation: sheetIn .42s cubic-bezier(.2, .9, .25, 1) both; }
+  .sheet.is-closing { animation: sheetOut .26s cubic-bezier(.5, 0, .8, .2) both; }
+}
+
+.sheet-hero, .sheet-status, .hours-block, .sheet-actions, .sheet-nav,
+.reports, .share-box, .feedback, .reviews, .sheet-note {
+  animation: riseIn .46s cubic-bezier(.2, .9, .3, 1) both;
+}
+.sheet-status { animation-delay: .05s; }
+.hours-block { animation-delay: .09s; }
+.sheet-actions { animation-delay: .12s; }
+.sheet-nav { animation-delay: .15s; }
+.reports { animation-delay: .18s; }
+.share-box { animation-delay: .04s; }
+.feedback { animation-delay: .1s; }
+.reviews { animation-delay: .14s; }
+.sheet-note { animation-delay: .18s; }
+
+/* mikro-interakciók */
+.sheet-icon-btn, .sheet-close, .sheet-copy, .hours-toggle, .report-btn {
+  transition: transform .16s ease, background .16s ease, border-color .16s ease, color .16s ease;
+}
+.sheet-icon-btn:hover, .sheet-close:hover, .sheet-copy:hover { transform: translateY(-1px) scale(1.04); }
+.report-btn:active, .sheet-actions .btn:active { transform: scale(.985); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet, .sheet-scrim, .sheet-hero, .sheet-status, .hours-block, .sheet-actions,
+  .sheet-nav, .reports, .share-box, .feedback, .reviews, .sheet-note,
+  .fb-rings, .fb-verdict, body.is-search .panel .search-block, body.is-search .panel .list { animation: none !important; }
+  .panel { transition: none; }
+}
+
+/* ===== v5: csak PC – szélesebb, modernebb popup + színes, animált pontszám ===== */
+
+.sheet-close-far { display: none; }
+
+@media (min-width: 901px) {
+  #sheet {
+    width: min(1260px, 96vw);
+    grid-template-columns: minmax(0, 392px) minmax(0, 1fr) minmax(0, 330px);
+    column-gap: 26px;
+    border-radius: 30px;
+    border-color: rgba(255, 255, 255, .1);
+    background:
+      radial-gradient(90% 70% at 12% -10%, rgba(216, 224, 47, .12), transparent 60%),
+      linear-gradient(180deg, rgba(18, 20, 17, .96), rgba(5, 6, 7, .98));
+    box-shadow: 0 70px 150px -60px #000, inset 0 1px 0 rgba(255, 255, 255, .09);
+    padding: 24px 28px 24px;
+  }
+  .sheet-close-far {
+    position: absolute;
+    top: 16px;
+    right: 18px;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
+    border: 1px solid rgba(255, 255, 255, .14);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05));
+    backdrop-filter: blur(20px) saturate(170%);
+    -webkit-backdrop-filter: blur(20px) saturate(170%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 12px 26px -16px #000;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    transition: transform .18s ease, background .18s ease, border-color .18s ease;
+  }
+  .sheet-close-far:hover {
+    transform: rotate(90deg);
+    border-color: rgba(216, 224, 47, .5);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .2), rgba(255, 255, 255, .07));
+  }
+  #sheet .sheet-hero-tools .sheet-close { display: none; }
+
+  /* kártyás bento-elrendezés a bal hasábban */
+  #sheet .sheet-status,
+  #sheet .hours-block,
+  #sheet .reports {
+    padding: 14px 16px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, .08);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .052), rgba(255, 255, 255, .012));
+  }
+  #sheet .sheet-actions .btn { height: 54px; border-radius: 16px; }
+  #sheet .sheet-nav {
+    padding: 10px 12px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, .07);
+    background: rgba(255, 255, 255, .035);
+  }
+  #sheet .sheet-hero { border-radius: 22px; }
+
+  /* --- színes, animált pontszám --- */
+  #sheet .fb-scale { --hue: 78deg; --p: 0%; --val: 0; }
+
+  #sheet .fb-rings {
+    top: 62px;
+    left: 50%;
+    width: 158px;
+    height: 158px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: conic-gradient(from -90deg,
+      hsl(var(--hue) 96% 58%) 0%,
+      hsl(calc(var(--hue) + 26deg) 96% 60%) 48%,
+      hsl(calc(var(--hue) + 48deg) 92% 58%) 100%);
+    -webkit-mask-image:
+      radial-gradient(circle, transparent 58%, #000 59%),
+      conic-gradient(from -90deg, #000 0 var(--p), transparent 0);
+    -webkit-mask-composite: source-in;
+    mask-image:
+      radial-gradient(circle, transparent 58%, #000 59%),
+      conic-gradient(from -90deg, #000 0 var(--p), transparent 0);
+    mask-composite: intersect;
+    box-shadow: none;
+    opacity: .95;
+    animation: fbGlow 3.6s ease-in-out infinite;
+  }
+  #sheet .fb-rings::before,
+  #sheet .fb-rings::after { display: none; }
+  @keyframes fbGlow {
+    0%, 100% { filter: drop-shadow(0 0 16px hsl(var(--hue) 92% 55% / .38)); }
+    50% { filter: drop-shadow(0 0 30px hsl(var(--hue) 92% 58% / .62)); }
+  }
+
+  #sheet .fb-big b {
+    font-size: clamp(62px, 4.6vw, 84px);
+    letter-spacing: -3px;
+    background: linear-gradient(180deg,
+      hsl(calc(var(--hue) + 22deg) 96% 90%) 0%,
+      hsl(var(--hue) 94% 64%) 55%,
+      hsl(calc(var(--hue) - 6deg) 88% 48%) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 10px 26px hsl(var(--hue) 90% 55% / .38));
+    transition: filter .25s ease;
+  }
+  #sheet .fb-scale.is-empty .fb-big b {
+    background: none;
+    color: rgba(255, 255, 255, .26);
+    -webkit-text-fill-color: rgba(255, 255, 255, .26);
+    filter: none;
+  }
+  #sheet .fb-scale.is-bump .fb-big { animation: fbBump .42s cubic-bezier(.2, .9, .3, 1); }
+  @keyframes fbBump {
+    0% { transform: scale(.9); }
+    60% { transform: scale(1.07); }
+    100% { transform: scale(1); }
+  }
+
+  #sheet .fb-verdict {
+    color: hsl(var(--hue) 92% 76%);
+    border-color: hsl(var(--hue) 92% 60% / .4);
+    background: hsl(var(--hue) 92% 60% / .12);
+    box-shadow: 0 0 22px hsl(var(--hue) 92% 60% / .14);
+    transition: color .22s ease, border-color .22s ease, background .22s ease;
+    animation: fbVerdictGlow 3.2s ease-in-out infinite;
+  }
+  @keyframes fbVerdictGlow {
+    0%, 100% { box-shadow: 0 0 18px hsl(var(--hue) 92% 60% / .12); }
+    50% { box-shadow: 0 0 30px hsl(var(--hue) 92% 60% / .3); }
+  }
+  #sheet .fb-scale.is-empty .fb-verdict {
+    color: rgba(216, 224, 47, .8);
+    border-color: rgba(216, 224, 47, .26);
+    background: rgba(216, 224, 47, .07);
+    box-shadow: none;
+    animation: none;
+  }
+
+  #sheet .fb-track { position: relative; }
+  #sheet .fb-track::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: var(--p);
+    border-radius: 0 999px 999px 0;
+    background: linear-gradient(90deg, rgba(6, 7, 8, .45), rgba(6, 7, 8, .84));
+    pointer-events: none;
+    transition: left .18s cubic-bezier(.2, .9, .3, 1);
+  }
+  #sheet #fbRange::-webkit-slider-thumb {
+    border-color: hsl(var(--hue) 96% 64%);
+    background: #F7F9EC;
+    box-shadow: 0 0 0 5px hsl(var(--hue) 92% 60% / .22), 0 0 24px hsl(var(--hue) 92% 58% / .8);
+    transition: box-shadow .2s ease, border-color .2s ease, transform .16s ease;
+  }
+  #sheet #fbRange:active::-webkit-slider-thumb { transform: scale(1.14); }
+  #sheet #fbRange::-moz-range-thumb {
+    border: 3px solid hsl(var(--hue) 96% 64%);
+    background: #F7F9EC;
+    box-shadow: 0 0 0 5px hsl(var(--hue) 92% 60% / .22), 0 0 24px hsl(var(--hue) 92% 58% / .8);
+  }
+}
+
+/* ===== v6: PC-rács, lábléc, teljes színskálás csúszka ===== */
+
+@media (min-width: 901px) {
+  /* a csúszkán maradjon végig a teljes színskála (nincs sötét fedés) */
+  #sheet .fb-track::after { display: none; }
+
+  /* lágy, színes fénygyűrű a pontszám körül */
+  #sheet .fb-rings {
+    display: block;
+    top: 56px;
+    left: 50%;
+    width: 244px;
+    height: 244px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle,
+      hsl(var(--hue) 95% 58% / .16) 0%,
+      hsl(var(--hue) 95% 58% / .07) 42%,
+      transparent 68%);
+    box-shadow: 0 0 90px hsl(var(--hue) 95% 58% / .12);
+    -webkit-mask: none;
+    mask: none;
+    opacity: 1;
+    animation: fbGlowSoft 4.4s ease-in-out infinite;
+  }
+  #sheet .fb-rings::before {
+    content: "";
+    display: block;
+    position: absolute;
+    inset: 30%;
+    border-radius: 50%;
+    border: 1px solid hsl(var(--hue) 95% 62% / .26);
+  }
+  #sheet .fb-rings::after { display: none; }
+  @keyframes fbGlowSoft {
+    0%, 100% { opacity: .72; transform: translate(-50%, -50%) scale(.98); }
+    50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  }
+  /* üres állapotban semleges, halvány fény */
+  #sheet .fb-scale.is-empty { --hue: 78deg; }
+  #sheet .fb-scale.is-empty .fb-rings { opacity: .32; box-shadow: none; }
+}
+
+@media (min-width: 1120px) {
+  #sheet { grid-template-columns: minmax(0, 378px) minmax(0, 1fr) minmax(0, 330px); }
+  #sheet .sheet-col-a { grid-column: 1; grid-row: 1 / span 2; }
+  #sheet .feedback { grid-column: 2; grid-row: 1; align-self: start; }
+  #sheet .reviews {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: start;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+    /* a bezárás gomb alatt kezdődjön a tartalom */
+    padding-top: 30px;
+  }
+  #sheet .share-box { grid-column: 2; grid-row: 2; align-self: start; }
+
+  /* a megjegyzés láblécként, teljes szélességben */
+  #sheet .sheet-col-b > .sheet-note {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin: 2px 0 0;
+    padding: 13px 0 0;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    font-size: 11.5px;
+    line-height: 1.65;
+    color: rgba(255, 255, 255, .42);
+    text-align: left;
+  }
+}
