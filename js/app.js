@@ -4019,7 +4019,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (el.introView) {
       el.introClose.addEventListener('click', introHide);
       el.introNext.addEventListener('click', function () { introSlide(introIndex + 1); });
-      el.introSlides.addEventListener('click', function () { introSlide(introIndex + 1); });
+      el.introSlides.addEventListener('click', function (e) {
+        if (e.target.closest('.intro-actions')) return;
+        introSlide(introIndex + 1);
+      });
       el.introDots.addEventListener('click', function (e) {
         var d = e.target.closest('[data-slide]');
         if (d) introSlide(+d.dataset.slide);

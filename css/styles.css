@@ -5292,3 +5292,260 @@ body.is-nav .stage > .dock { display: none; }
 }
 .sos-body h3 { text-shadow: 0 2px 18px rgba(0, 0, 0, .85); }
 #sosAddr { color: rgba(255, 255, 255, .7); text-shadow: 0 2px 14px rgba(0, 0, 0, .8); }
+
+/* ===================== Bemutató v3 – liquid glass, 6. dia = fiók ===================== */
+
+.intro {
+  background:
+    radial-gradient(70% 60% at 14% -8%, rgba(216, 224, 47, .18), transparent 62%),
+    radial-gradient(60% 55% at 92% 108%, rgba(34, 201, 238, .1), transparent 64%),
+    linear-gradient(180deg, #08090b 0%, #040507 60%, #000 100%);
+}
+
+.intro-card {
+  width: min(660px, 100%);
+  border-radius: 34px;
+  border: 1px solid rgba(255, 255, 255, .11);
+  background: linear-gradient(180deg, rgba(26, 29, 24, .8), rgba(6, 7, 8, .96));
+  box-shadow:
+    0 80px 160px -70px #000,
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 -1px 0 rgba(255, 255, 255, .04);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+}
+
+/* a diák kitöltik a rendelkezésre álló helyet */
+.intro-slides { display: flex; flex-direction: column; }
+.intro-slide.is-active { flex: 1 1 auto; align-content: start; }
+
+/* lépésszám 6 diára – diánként fix érték */
+.intro-slide.is-active::before {
+  grid-column: 1;
+  grid-row: 2;
+  margin-bottom: 10px;
+  counter-increment: none;
+}
+.intro-slide:nth-child(1)::before { content: "01 / 06"; }
+.intro-slide:nth-child(2)::before { content: "02 / 06"; }
+.intro-slide:nth-child(3)::before { content: "03 / 06"; }
+.intro-slide:nth-child(4)::before { content: "04 / 06"; }
+.intro-slide:nth-child(5)::before { content: "05 / 06"; }
+.intro-slide:nth-child(6)::before { content: "06 / 06"; }
+.intro-slide h3 {
+  grid-column: 1;
+  grid-row: 3;
+  font-size: clamp(26px, 6.4vw, 34px);
+  line-height: 1.04;
+  letter-spacing: -1.4px;
+}
+.intro-slide p { grid-column: 1; grid-row: 4; font-size: 14.5px; line-height: 1.6; }
+
+/* --- stage: liquid glass --- */
+.intro-art {
+  grid-column: 1;
+  grid-row: 1;
+  aspect-ratio: 4 / 3;
+  max-height: 300px;
+  margin: 0 0 20px;
+  border-radius: 30px;
+  border-color: rgba(255, 255, 255, .1);
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, .11), rgba(255, 255, 255, 0) 44%),
+    radial-gradient(80% 72% at 50% 46%, rgba(216, 224, 47, .2), transparent 74%),
+    linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .012));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 -40px 70px -50px rgba(216, 224, 47, .45),
+    0 44px 90px -56px #000;
+}
+
+/* --- lábléc --- */
+.intro-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, .07);
+}
+.intro-dots { display: flex; align-items: center; gap: 7px; margin: 0; }
+.intro-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .2);
+  transition: width .26s cubic-bezier(.2, .9, .3, 1), background .2s ease, box-shadow .2s ease;
+}
+.intro-dot.is-active {
+  width: 24px;
+  background: var(--lime);
+  box-shadow: 0 0 14px rgba(216, 224, 47, .75);
+}
+
+.intro-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .15);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .045));
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 14px 30px -22px #000;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+.intro-next:hover {
+  transform: translateY(-1px);
+  border-color: rgba(216, 224, 47, .42);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .19), rgba(255, 255, 255, .07));
+}
+
+/* --- 6. dia: fiók --- */
+.intro-slide--cta.is-active { grid-template-rows: auto auto auto auto auto; }
+.cta-art {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  place-items: center;
+  padding: 26px 0 22px;
+}
+.cta-orb {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 30px;
+  color: #10120A;
+  background: linear-gradient(180deg, #F5FAB8, #D8E02F 58%, #C0CE22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .75),
+    inset 0 -10px 24px -12px rgba(0, 0, 0, .25),
+    0 30px 60px -24px rgba(216, 224, 47, .9);
+  animation: ctaFloat 6s ease-in-out infinite alternate;
+}
+@keyframes ctaFloat {
+  from { transform: translateY(0) rotate(-1deg); }
+  to { transform: translateY(-8px) rotate(1deg); }
+}
+.cta-orb svg { width: 42px; height: 42px; }
+
+.intro-slide--cta .intro-actions {
+  grid-column: 1;
+  grid-row: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+.intro-slide--cta .intro-actions .btn-primary {
+  width: 100%;
+  height: 56px;
+  border-radius: 18px;
+  font-size: 15.5px;
+  letter-spacing: -.2px;
+  color: #10120A;
+  background: linear-gradient(180deg, #F5FAB8, #D8E02F 55%, #C0CE22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    0 26px 48px -20px rgba(216, 224, 47, .9);
+}
+.intro-slide--cta .intro-actions .btn-primary:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .8),
+    0 30px 56px -20px rgba(216, 224, 47, 1);
+}
+.intro-slide--cta .intro-actions-row { display: flex; gap: 10px; margin: 0; }
+.intro-slide--cta .intro-actions-row .btn {
+  flex: 1;
+  height: 52px;
+  border-radius: 16px;
+  border-color: rgba(255, 255, 255, .17);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05));
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .24), 0 18px 36px -26px #000;
+  color: #fff;
+}
+.intro-slide--cta .intro-actions-row .btn:hover {
+  border-color: rgba(255, 255, 255, .32);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .2), rgba(255, 255, 255, .08));
+}
+.intro-slide--cta .intro-guest {
+  align-self: center;
+  border: 0;
+  background: none;
+  padding: 8px 6px 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, .58);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, .25);
+  text-underline-offset: 4px;
+}
+.intro-slide--cta .intro-guest:hover { color: #fff; }
+.intro-slide--cta .intro-note {
+  display: block;
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, .36);
+}
+.intro-slide--cta h3 { font-size: clamp(25px, 6vw, 31px); }
+
+@media (max-width: 900px) {
+  .intro { padding: 0; }
+  .intro-card {
+    width: 100%;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  .intro-slide h3 { font-size: clamp(25px, 7vw, 31px); }
+  .intro-slide.is-active { align-content: stretch; }
+  .intro-slide--cta.is-active { align-content: center; }
+  /* a kép-“stage” kitölti a maradék helyet, így nincs üres lyuk */
+  .intro-slide:not(.intro-slide--cta).is-active { grid-template-rows: minmax(200px, 1fr) auto auto auto; }
+  .intro-slide:not(.intro-slide--cta) .intro-art {
+    aspect-ratio: auto;
+    max-height: none;
+    height: 100%;
+  }
+}
+
+@media (min-width: 901px) {
+  .intro-card { width: min(1040px, 100%); padding: 26px 34px 24px; }
+  .intro-slides { padding: 26px 0 20px; }
+  .intro-slide.is-active {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.04fr);
+    grid-template-rows: auto auto auto;
+    column-gap: 42px;
+    align-items: start;
+  }
+  .intro-art {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    aspect-ratio: 4 / 3.2;
+    max-height: none;
+    margin: 0;
+  }
+  .intro-slide.is-active::before { grid-column: 1; grid-row: 1; margin-bottom: 16px; }
+  .intro-slide h3 { grid-column: 1; grid-row: 2; font-size: clamp(30px, 3vw, 40px); }
+  .intro-slide p { grid-column: 1; grid-row: 3; max-width: 40ch; }
+
+  .intro-slide--cta.is-active { grid-template-rows: auto auto auto auto; }
+  .cta-art { grid-column: 2; grid-row: 1 / span 4; align-self: center; padding: 0; }
+  .intro-slide--cta .intro-actions { grid-column: 1; grid-row: 4; margin-top: 18px; max-width: 400px; }
+  .intro-slide--cta .intro-note { text-align: left; }
+}
