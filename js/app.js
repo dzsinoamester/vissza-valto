@@ -18,7 +18,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   // Az OSRM nyilvános demója csak autós profilt számol (a kerékpár/gyalog kérésre is
   // autós időt ad), ezért bringához és gyalogláshoz Valhallát használunk.
   var VALHALLA = 'https://valhalla1.openstreetmap.de/route';
-  var MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark';
+  // saját stílus (map/style.json) – ha nem töltődik be, a nyilvános dark stílusra esünk vissza
+  var MAP_STYLE = 'map/style.json';
+  var MAP_STYLE_FALLBACK = 'https://tiles.openfreemap.org/styles/dark';
 
   var EMPTY_FC = { type: 'FeatureCollection', features: [] };
 
@@ -1830,8 +1832,14 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     map.once('load', function () { collapseAttrib(); setTimeout(collapseAttrib, 400); });
 
     map.on('style.load', onStyleLoad);
+    var styleRetried = false;
     map.on('error', function (e) {
       var msg = e && e.error ? String(e.error.message || e.error) : '';
+      // ha a saját stílus nem érhető el, egyszer visszaesünk a nyilvános dark stílusra
+      if (!styleRetried && /style\.json|style/i.test(msg) && /fetch|404|not found|load/i.test(msg)) {
+        styleRetried = true;
+        try { map.setStyle(MAP_STYLE_FALLBACK); return; } catch (err) { }
+      }
       // a csempe-hiperhivatkozások és a hiányzó sprite-képek hibáit nem öntjük a konzolra
       if (/Failed to fetch|AbortError|could not be loaded/i.test(msg)) return;
       if (msg) console.warn('[térkép]', msg);
@@ -1841,7 +1849,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   }
 
   function onStyleLoad() {
-    applyTheme();
+    // a színeket a saját stílus (map/style.json) adja – nincs utólagos átfestés
     applySky();
     addBuildings3D();
     addDataLayers();
@@ -1854,51 +1862,13 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     maybeHideLoader();
   }
 
+
+  /* --- égbolt + fényezés: mély, éjszakai térhatás döntéskor --- */
   function setP(id, prop, val) {
     if (!map.getLayer(id)) return;
     try { map.setPaintProperty(id, prop, val); } catch (e) { }
   }
 
-  /* --- sötét stílus → fekete + lime paletta --- */
-  function applyTheme() {
-    var layers;
-    try { layers = map.getStyle().layers || []; } catch (e) { return; }
-
-    layers.forEach(function (l) {
-      var id = l.id;
-
-      if (l.type === 'background') { setP(id, 'background-color', '#050607'); return; }
-
-      if (l.type === 'fill') {
-        if (/water/.test(id)) return setP(id, 'fill-color', '#08131F');
-        if (/wood|park|grass|forest|scrub|farmland/.test(id)) return setP(id, 'fill-color', '#080F0B');
-        if (/building/.test(id)) return setP(id, 'fill-color', '#0E1013');
-        if (/ice|glacier/.test(id)) return setP(id, 'fill-color', '#0C0E12');
-        return setP(id, 'fill-color', '#07080A');
-      }
-
-      if (l.type === 'line') {
-        if (/waterway/.test(id)) return setP(id, 'line-color', '#101F30');
-        if (/motorway/.test(id)) return setP(id, 'line-color', '#3C4454');
-        if (/_inner/.test(id)) return setP(id, 'line-color', '#2A303C');
-        if (/_casing|_dashline/.test(id)) return setP(id, 'line-color', '#05070A');
-        if (/railway/.test(id)) return setP(id, 'line-color', '#1E232D');
-        if (/boundary/.test(id)) return setP(id, 'line-color', 'rgba(216,224,47,.22)');
-        if (/aeroway|road_pier/.test(id)) return setP(id, 'line-color', '#171B22');
-        return setP(id, 'line-color', '#161A21');
-      }
-
-      if (l.type === 'symbol') {
-        var big = /place_city|place_town|country_name|place_country/.test(id);
-        var tiny = /water_name|highway_name|road_oneway|railway_name|shop|housenum|mountain|peak/.test(id);
-        setP(id, 'text-color', big ? '#EDEFF3' : (tiny ? '#5C6270' : '#8A9099'));
-        setP(id, 'text-halo-color', 'rgba(3,4,5,.95)');
-        setP(id, 'text-halo-width', 1.7);
-      }
-    });
-  }
-
-  /* --- égbolt + fényezés: mély, éjszakai térhatás döntéskor --- */
   function applySky() {
     if (typeof map.setSky === 'function') {
       try {
@@ -2064,7 +2034,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         paint: {
           'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 3.2, 11, 5, 16, 6.5],
           'circle-color': ['match', ['get', 'type'], 'automata', '#FF7A45', '#22C9EE'],
-          'circle-stroke-color': '#050607',
+          'circle-stroke-color': '#0B0E13',
           'circle-stroke-width': 1.6
         }
       });
@@ -2094,7 +2064,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
             7, '#F16524',
             9, '#D8E02F'
           ],
-          'circle-stroke-color': '#050607',
+          'circle-stroke-color': '#0B0E13',
           'circle-stroke-width': 2
         }
       });
@@ -2121,7 +2091,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           'text-offset': [0, -1.35],
           'text-allow-overlap': true
         },
-        paint: { 'text-color': '#D8E02F', 'text-halo-color': '#050607', 'text-halo-width': 2 }
+        paint: { 'text-color': '#D8E02F', 'text-halo-color': '#0B0E13', 'text-halo-width': 2 }
       });
 
       // modern klaszter: lime ragyogás a korong alatt, belső fénymag, sötét számláló
@@ -2198,7 +2168,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       map.addLayer({
         id: 'route-case', type: 'line', source: 'route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#050607', 'line-width': 12, 'line-opacity': .85 }
+        paint: { 'line-color': '#0B0E13', 'line-width': 12, 'line-opacity': .85 }
       });
       map.addLayer({
         id: 'route-line', type: 'line', source: 'route',

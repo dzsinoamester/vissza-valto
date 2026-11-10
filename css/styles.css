@@ -81,9 +81,10 @@ a { color: inherit; }
   inset: 0;
   z-index: 2;
   pointer-events: none;
+  /* a sötét térkép-stílushoz igazítva: jóval finomabb vignetta, hogy a részletek ne tűnjenek el */
   background:
-    linear-gradient(180deg, rgba(0, 0, 0, .82), transparent 16%),
-    radial-gradient(140% 105% at 50% 50%, transparent 46%, rgba(0, 0, 0, .72) 100%);
+    linear-gradient(180deg, rgba(0, 0, 0, .58), transparent 15%),
+    radial-gradient(150% 108% at 50% 50%, transparent 58%, rgba(0, 0, 0, .52) 100%);
 }
 
 /* ===================== Fejléc ===================== */
