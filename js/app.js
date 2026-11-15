@@ -98,7 +98,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   }
 
-  /* --- pontszám-jelvény (Budicheck-stílus): <7 piros, 7–8,9 narancs, 9+ lime --- */
+  /* --- pontszám-jelvény (saját skála): <7 piros, 7–8,9 narancs, 9+ lime --- */
   function scoreOf(id) {
     var d = id ? fbOf(id) : null;
     return d ? d.score : null;
@@ -746,7 +746,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   ];
 
   var AV_COLORS = [
-    { name: 'Lime',      bg: 'linear-gradient(135deg, #F0F66B, var(--lime))', fg: '#0A0B03' },
+    { name: 'Acélkék',   bg: 'linear-gradient(135deg, #6FC0E6, var(--accent))', fg: '#04121B' },
     { name: 'Narancs',   bg: 'linear-gradient(135deg, #FFB088, #FF7A45)',     fg: '#2A0F04' },
     { name: 'Égkék',     bg: 'linear-gradient(135deg, #8FD3FF, #3FA2FF)',     fg: '#04182B' },
     { name: 'Rózsaszín', bg: 'linear-gradient(135deg, #FFB3D9, #FF6FB5)',     fg: '#2B0716' },
@@ -1985,7 +1985,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   /* --- útvonal: futó fény (line-gradient + lineMetrics forrás) --- */
 
-  // a `o` a fény fejének pozíciója az útvonalon (0..1); a fej fehér, mögötte lime utófény
+  // a `o` a fény fejének pozíciója az útvonalon (0..1); a fej fehér, mögötte kék utófény
   function flowGradient(o) {
     var N = 40, stops = ['interpolate', ['linear'], ['line-progress']];
     for (var i = 0; i <= N; i++) {
@@ -2005,7 +2005,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   /* --- pontok + klűszerek + útvonal --- */
 
-  // a klaszter alatti lime ragyogás sugara; a `pulse` (0..7) adja a lüktetést
+  // a klaszter alatti kék ragyogás sugara; a `pulse` (0..7) adja a lüktetést
   function clusterGlowRadius(pulse) {
     return ['step', ['get', 'point_count'], 26 + pulse, 10, 33 + pulse, 50, 41 + pulse, 200, 49 + pulse];
   }
@@ -2054,7 +2054,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         }
       });
 
-      // értékelt pontok: pontszám-jelvény (piros <7, narancs 7–8,9, lime 9+)
+      // értékelt pontok: pontszám-jelvény (piros <7, narancs 7–8,9, kék 9+)
       map.addLayer({
         id: 'repont-score', type: 'circle', source: 'repont',
         filter: ['all', ['!', ['has', 'point_count']], ['has', 'score']],
@@ -2064,7 +2064,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
             'interpolate', ['linear'], ['get', 'score'],
             6.9, '#DA1E28',
             7, '#F16524',
-            9, '#D8E02F'
+            9, '#1B6D99'
           ],
           'circle-stroke-color': '#0B0E13',
           'circle-stroke-width': 2
@@ -2082,7 +2082,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         paint: { 'text-color': '#0A0B03' }
       });
 
-      // az első három legközelebbi pont lime-számú jelölője
+      // az első három legközelebbi pont kék számú jelölője
       map.addLayer({
         id: 'repont-rank', type: 'symbol', source: 'repont',
         filter: ['all', ['!', ['has', 'point_count']], ['<=', ['get', 'rank'], 3]],
@@ -2093,16 +2093,16 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           'text-offset': [0, -1.35],
           'text-allow-overlap': true
         },
-        paint: { 'text-color': '#D8E02F', 'text-halo-color': '#0B0E13', 'text-halo-width': 2 }
+        paint: { 'text-color': '#1B6D99', 'text-halo-color': '#0B0E13', 'text-halo-width': 2 }
       });
 
-      // modern klaszter: lime ragyogás a korong alatt, belső fénymag, sötét számláló
+      // modern klaszter: kék ragyogás a korong alatt, belső fénymag, sötét számláló
       map.addLayer({
         id: 'repont-cluster-glow', type: 'circle', source: 'repont',
         filter: ['has', 'point_count'],
         paint: {
           'circle-radius': clusterGlowRadius(0),
-          'circle-color': '#D8E02F',
+          'circle-color': '#1B6D99',
           'circle-opacity': .2,
           'circle-blur': 1
         }
@@ -2114,7 +2114,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         paint: {
           'circle-radius': ['step', ['get', 'point_count'], 16, 10, 20, 50, 25, 200, 31],
           'circle-color': 'rgba(7,8,10,.94)',
-          'circle-stroke-color': '#D8E02F',
+          'circle-stroke-color': '#1B6D99',
           'circle-stroke-width': 2
         }
       });
@@ -2137,17 +2137,17 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           'text-font': ['Noto Sans Regular'],
           'text-size': ['step', ['get', 'point_count'], 13, 10, 14, 50, 15]
         },
-        paint: { 'text-color': '#D8E02F', 'text-halo-color': 'rgba(3,4,5,.9)', 'text-halo-width': 2 }
+        paint: { 'text-color': '#1B6D99', 'text-halo-color': 'rgba(3,4,5,.9)', 'text-halo-width': 2 }
       });
 
-      // hover: lime keret a pont alatt (az egér fölé érésre)
+      // hover: kék keret a pont alatt (az egér fölé érésre)
       map.addLayer({
         id: 'repont-hover', type: 'circle', source: 'repont',
         filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'id'], -1]],
         paint: {
           'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 9, 11, 13, 16, 16.5],
           'circle-color': 'rgba(216,224,47,.08)',
-          'circle-stroke-color': '#D8E02F',
+          'circle-stroke-color': '#1B6D99',
           'circle-stroke-width': 1.8
         }
       });
@@ -2157,7 +2157,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         filter: ['==', ['get', 'id'], -1],
         paint: {
           'circle-radius': 9.5,
-          'circle-color': '#D8E02F',
+          'circle-color': '#1B6D99',
           'circle-stroke-color': 'rgba(216,224,47,.45)',
           'circle-stroke-width': 7
         }
@@ -2176,12 +2176,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         id: 'route-line', type: 'line', source: 'route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
-          'line-color': '#D8E02F',
+          'line-color': '#1B6D99',
           'line-width': ['interpolate', ['linear'], ['zoom'], 8, 3.5, 15, 6],
           'line-opacity': .95
         }
       });
-      // az útvonalon végigfutó „energia-fény": fej + lime utófény (animálva)
+      // az útvonalon végigfutó „energia-fény": fej + kék utófény (animálva)
       map.addLayer({
         id: 'route-flow', type: 'line', source: 'route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -2243,7 +2243,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       map.on('mouseleave', lid, function () { map.getCanvas().style.cursor = ''; });
     });
 
-    // --- hover: lime keret + lebegő előnézet (csak egérrel, asztali gépen) ---
+    // --- hover: kék keret + lebegő előnézet (csak egérrel, asztali gépen) ---
     if (HOVER_CAPABLE) {
       map.on('mousemove', onHoverMove);
       map.on('dragstart', function () { hoverDrag = true; clearHover(); });
@@ -2591,7 +2591,6 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     highlightCard(p.id);
     setSelected(p.id);
     closePopup();
-    if (!isMobile()) openPopupFor(p);
 
     routeReq
       .then(function (rt) {
@@ -3103,8 +3102,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     var sc = rating ? rating.score : null;
     // a pont színe a saját értékelésed alapján (Budicheck-stílus)
     var dotStyle = sc == null ? '' :
-      ';background:' + (sc >= 9 ? '#D8E02F' : (sc >= 7 ? '#F16524' : '#DA1E28')) +
-      ';box-shadow:0 0 0 4px rgba(255,255,255,.06),0 0 14px ' + (sc >= 9 ? '#D8E02F' : (sc >= 7 ? '#F16524' : '#DA1E28'));
+      ';background:' + (sc >= 9 ? '#1B6D99' : (sc >= 7 ? '#F16524' : '#DA1E28')) +
+      ';box-shadow:0 0 0 4px rgba(255,255,255,.06),0 0 14px ' + (sc >= 9 ? '#1B6D99' : (sc >= 7 ? '#F16524' : '#DA1E28'));
     return '<button class="card' + (p.id === selectedId ? ' is-sel' : '') + '" data-id="' + p.id +
       '" role="listitem" style="--i:' + Math.min(i || 0, 14) + '">' +
       (p._rank ? '<span class="card-rank">#' + p._rank + ' LEGKÖZELEBB</span>' : '') +
@@ -3144,7 +3143,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       '</button>';
     }).join('');
 
-    // a nagy lime gomb rögtön navigál a legközelebbi ponthoz
+    // a nagy kék gomb rögtön navigál a legközelebbi ponthoz
     el.qbarGo.onclick = function () { startRoute(top[0], null, { navigate: true }); };
   }
 
@@ -3168,13 +3167,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     try { history.replaceState(null, '', '#pont/' + id); } catch (e) { }
 
     if (opts.fromMap) {
-      if (isMobile()) openSheet(p); else openPopupFor(p);
+      openSheet(p);
       return;
     }
 
     if (isMobile()) { setSearchOpen(false); setDock('dockMap'); }
     map.easeTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 14), duration: 750 });
-    if (!isMobile()) openPopupFor(p);
     openSheet(p);
   }
 
@@ -3239,7 +3237,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     paintSheetMiniMap(p);
   }
 
-  // nagy státuszsor: „Ma 9:00 - 20:00” + állapot + vékony lime sáv
+  // nagy státuszsor: „Ma 9:00 - 20:00” + állapot + vékony kék sáv
   function paintSheetStatus(st, hrs, day, now) {
     var mins = now.getHours() * 60 + now.getMinutes();
     var r = dayRange(hrs, day);
@@ -3863,22 +3861,23 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     } catch (e) { }
   }
 
-  // A menü helye: telefon/tablet (<= 900px) -> alsó lebegő sáv (SOS-sel együtt), PC -> fejléc
+  // A menü helye minden nézetben a színpad alján lebegő sáv: mobilon a SOS-sel
+  // egy sorban, PC-n a fejléc alatt, a térkép alján.
   function placeDock() {
     var stage = document.querySelector('.stage');
     var topbar = document.querySelector('.topbar');
-    var stats = document.getElementById('topStats');
     var sos = el.sosBtn;
     if (!stage || !topbar || !el.dock || !sos) return;
+    if (el.dock.parentNode !== stage) stage.appendChild(el.dock);
     if (isMobile()) {
-      if (el.dock.parentNode !== stage) stage.appendChild(el.dock);
       var row = document.querySelector('.float-row');
       if (row && sos.parentNode !== row) row.insertBefore(sos, row.firstChild);
     } else {
-      if (el.dock.parentNode !== topbar) topbar.insertBefore(el.dock, stats);
-      if (sos.parentNode !== topbar) topbar.appendChild(sos);
+      if (sos.parentNode !== stage) stage.appendChild(sos);
       el.panel.classList.remove('is-expanded');
     }
+    // az áthelyezés után a csúszó pirula a gomb új helyére áll
+    syncDockPill();
   }
 
   // Mobilon a keresőpanel alapból rejtve van, csak a Keresés gombra jön be
@@ -4189,17 +4188,19 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     // Dokk
 
-    el.dockTop.addEventListener('click', function () { setSearchOpen(false); openOverlay('top'); setDock('dockTop'); });
-    el.dockFriends.addEventListener('click', function () { setSearchOpen(false); openFriendsOverlay(); setDock('dockFriends'); });
+    el.dockTop.addEventListener('click', function () { closeSheet(); setSearchOpen(false); openOverlay('top'); setDock('dockTop'); });
+    el.dockFriends.addEventListener('click', function () { closeSheet(); setSearchOpen(false); openFriendsOverlay(); setDock('dockFriends'); });
     el.dockMap.addEventListener('click', function () {
+      closeSheet();
       closeOverlay();
       setSearchOpen(false);
       setDock('dockMap');
       if (state.me) map.easeTo({ center: [state.me.lng, state.me.lat], zoom: Math.max(map.getZoom(), 13), duration: 750 });
       else map.easeTo({ center: [19.4597, 47.1625], zoom: 6.9, duration: 750 });
     });
-    el.dockProfile.addEventListener('click', function () { setSearchOpen(false); openOverlay('profile'); setDock('dockProfile'); });
+    el.dockProfile.addEventListener('click', function () { closeSheet(); setSearchOpen(false); openOverlay('profile'); setDock('dockProfile'); });
     el.dockSearch.addEventListener('click', function () {
+      closeSheet();
       closeOverlay();
       // újabb kattintás a Keresésre bezárja a panelt (minden nézetben)
       if (document.body.classList.contains('is-search') && el.dockSearch.classList.contains('is-active')) {
