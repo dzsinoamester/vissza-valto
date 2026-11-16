@@ -3146,17 +3146,8 @@ body.is-nav .stage > .dock { display: none; }
 .sheet-fav.is-fav { color: var(--accent); border-color: rgba(27, 109, 153, .55); }
 
 /* bejelentkezve: kis kék pötty a Profil ikonon */
-.dock-btn.is-logged-in::after {
-  content: '';
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 2px rgba(5, 6, 7, .9);
-}
+/* a profil ikon melletti kis kék pont eltávolítva kérésre
+   (.dock-btn.is-logged-in::after) */
 
 /* ===================== Első látogató: bemutató ===================== */
 
