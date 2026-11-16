@@ -8650,3 +8650,43 @@ html[data-theme="deep"] .map-vignette { background: radial-gradient(120% 90% at 
   font-weight: 800;
   box-shadow: 0 2px 6px rgba(0, 0, 0, .45);
 }
+
+/* ===================== v33: admin értesítés űrlap ===================== */
+
+.ann-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(27, 109, 153, .32);
+  background: linear-gradient(160deg, rgba(27, 109, 153, .12), rgba(255, 255, 255, .02));
+}
+.ann-form input,
+.ann-form textarea,
+.ann-form select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: rgba(8, 12, 17, .7);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.ann-form input::placeholder,
+.ann-form textarea::placeholder { color: var(--ink-3); }
+.ann-form input:focus,
+.ann-form textarea:focus,
+.ann-form select:focus {
+  outline: none;
+  border-color: rgba(27, 109, 153, .75);
+  box-shadow: 0 0 0 3px rgba(27, 109, 153, .18);
+}
+.ann-form .ann-row { display: flex; gap: 8px; align-items: center; }
+.ann-form .ann-row select { flex: 1; }
+.ann-form .ann-row .btn { flex: none; }
+
+/* hosszú értesítés-szöveg ne törje a sort */
+.notif-main { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

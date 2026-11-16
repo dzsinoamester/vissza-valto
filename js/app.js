@@ -786,6 +786,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (account.user) {
       syncAvatarMeta();
       loadProfile();
+      loadAnnouncements();
+      subscribeAnnouncements();
+      checkAdmin();
       if (social.accountUser !== account.user.id) {
         social.accountUser = account.user.id;
         loadAccountSocial();
@@ -3811,6 +3814,54 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   /* ==================== ranglista / profil ==================== */
 
+  /* --- admin értesítések --- */
+
+  function loadAnnouncements() {
+    if (!sb) return Promise.resolve();
+    return sb.from('announcements')
+      .select('id,title,body,kind,created_at')
+      .eq('active', true)
+      .order('created_at', { ascending: false })
+      .limit(50)
+      .then(function (r) {
+        if (r.error || !r.data) return;
+        state.ann = r.data;
+        if (overlayKind === 'notif' || overlayKind === 'profile') openOverlay(overlayKind);
+      })
+      .catch(function () { });
+  }
+
+  function checkAdmin() {
+    if (!sb || !account.user) { state.isAdmin = false; return Promise.resolve(); }
+    return sb.rpc('is_admin').then(function (r) {
+      var was = state.isAdmin;
+      state.isAdmin = !r.error && r.data === true;
+      if (was !== state.isAdmin && overlayKind === 'settings') openOverlay('settings');
+    }).catch(function () { state.isAdmin = false; });
+  }
+
+  function subscribeAnnouncements() {
+    if (!sb || !sb.channel || subscribeAnnouncements._on) return;
+    subscribeAnnouncements._on = true;
+    try {
+      sb.channel('vissza-ann')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'announcements' }, function (payload) {
+          var a = payload && payload.new;
+          if (!a || !a.id) return;
+          var exists = (state.ann || []).some(function (x) { return x.id === a.id; });
+          if (exists) return;
+          state.ann = [a].concat(state.ann || []);
+          toast(a.title);
+          if (overlayKind === 'notif' || overlayKind === 'profile') openOverlay(overlayKind);
+        })
+        .subscribe();
+    } catch (e) { subscribeAnnouncements._on = false; }
+  }
+
+  function annForMe() {
+    return (state.ann || []).filter(function (a) { return a && a.active !== false; });
+  }
+
   /* --- beállítások --- */
   var SETTINGS_KEY = 'vissza.settings.v1';
   var settings = { theme: 'default', toasts: true, mode: '' };
@@ -3858,6 +3909,26 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       '<div class="set-row"><span class="set-main"><b>Helyi adatok törlése</b><small>Kedvencek, listák, értékelések és előzmények ezen az eszközön</small></span>' +
         '<button class="btn btn-ghost btn-sm" type="button" data-set="clear">Törlés</button></div>' +
       '<div class="set-note">A fiókodhoz kötött adatok (barátok, üzenetek) törléséhez jelentkezz be, és használd a fiók menüt.</div>' +
+      (state.isAdmin ?
+        '<div class="set-sec">Admin – értesítés küldése</div>' +
+        '<form class="ann-form" data-ann="send">' +
+          '<input name="title" type="text" maxlength="80" placeholder="Cím (pl. Új pontok Budapesten)" required>' +
+          '<textarea name="body" rows="2" maxlength="280" placeholder="Üzenet szövege" required></textarea>' +
+          '<div class="ann-row">' +
+            '<select name="kind" aria-label="Típus">' +
+              '<option value="info">Info</option>' +
+              '<option value="news">Újdonság</option>' +
+              '<option value="warn">Figyelmeztetés</option>' +
+            '</select>' +
+            '<button class="btn btn-primary" type="submit">Küldés mindenkinek</button>' +
+          '</div>' +
+          '<div class="set-note">A kiküldött üzenet azonnal megjelenik minden nyitott app Értesítések listájában.</div>' +
+        '</form>' :
+        (account.user ?
+          '<div class="set-sec">Admin</div>' +
+          '<div class="set-row"><span class="set-main"><b>Ehhez admin jog kell</b><small>A(z) ' +
+            esc(account.user.email || '') + ' fiók nincs az <code>admins</code> táblában. Futtasd a ' +
+            '<code>data/supabase-admin-dzsinokalla.sql</code> fájlt a Supabase SQL Editorban, majd töltsd újra az oldalt.</small></span></div>' : '')) +
     '</div>';
   }
 
@@ -3870,6 +3941,14 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   function notifItems() {
     var out = [];
+    annForMe().forEach(function (a) {
+      out.push({
+        key: 'ann' + a.id,
+        at: Date.parse(a.created_at) || 0,
+        text: a.title + ' – ' + a.body,
+        kind: 'ann'
+      });
+    });
     (soc.pokes || []).forEach(function (p) {
       out.push({ key: 'poke' + p.id, at: p.at || 0, text: nameOf(p.from_id) + ' megbökött' });
     });
@@ -4961,6 +5040,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     loadSettings();
 
+    // nyilvános admin értesítések (bejelentkezés nélkül is látszanak)
+    if (sb) { loadAnnouncements(); subscribeAnnouncements(); }
+
     if (el.resetBtn) el.resetBtn.addEventListener('click', function () {
       el.searchInput.value = '';
       el.searchClear.hidden = true;
@@ -5293,6 +5375,37 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     }
     document.addEventListener('click', function (e) {
       if (el.mapMenu && !el.mapMenu.hidden && !e.target.closest('#mapMenu')) closeMapMenu();
+    });
+
+    // admin értesítés küldése
+    document.addEventListener('submit', function (e) {
+      var f = e.target.closest('form[data-ann]');
+      if (!f) return;
+      e.preventDefault();
+      if (!sb || !account.user) { toast('Jelentkezz be az értesítés küldéséhez'); return; }
+      var title = ((f.querySelector('[name="title"]') || {}).value || '').trim();
+      var body = ((f.querySelector('[name="body"]') || {}).value || '').trim();
+      var kind = (f.querySelector('[name="kind"]') || {}).value || 'info';
+      if (!title || !body) { toast('Cím és szöveg is kell'); return; }
+      var btn = f.querySelector('button[type="submit"]');
+      if (btn) btn.disabled = true;
+      sb.from('announcements').insert({ title: title, body: body, kind: kind })
+        .then(function (r) {
+          if (btn) btn.disabled = false;
+          if (r.error) {
+            toast(r.error.code === '42501'
+              ? 'Nincs admin jogod az adatbázisban – futtasd a data/supabase-announcements-fix.sql-t'
+              : 'Nem sikerült: ' + r.error.message);
+            return;
+          }
+          toast('Értesítés elküldve');
+          f.reset();
+          loadAnnouncements();
+        })
+        .catch(function () {
+          if (btn) btn.disabled = false;
+          toast('Hálózati hiba – próbáld újra');
+        });
     });
 
     // értesítések / beállítások belépők és vezérlők
