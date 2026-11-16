@@ -7082,3 +7082,311 @@ body.is-nav .stage > .dock { display: none; }
 @media (min-width: 1120px) {
   #sheet .sheet-hero { height: 252px; }
 }
+
+/* ===================== v13: Barátok – kéthasábos inbox ===================== */
+
+/* kiemelt barátkérés-kártya a lista tetején */
+.fr-reqs {
+  margin-top: 14px;
+  padding: 12px 14px 4px;
+  border: 1px solid rgba(44, 134, 184, .34);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(44, 134, 184, .14), rgba(44, 134, 184, .05));
+}
+.fr-reqs-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.fr-reqs-head .fb-eyebrow { margin: 0; }
+.fr-reqs-head b { font-size: 11px; font-weight: 700; letter-spacing: .3px; color: var(--accent-hi); }
+.fr-req { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid rgba(255, 255, 255, .07); }
+.fr-req:first-of-type { border-top: 0; }
+.fr-req .fr-av { border-color: rgba(255, 255, 255, .14); }
+.fr-req .p-btn { height: 30px; padding: 0 12px; font-size: 12px; }
+.fr-req.is-out { opacity: .72; }
+
+/* barát-sor: koppintásra beszélgetés */
+.fr-person { cursor: pointer; border-top: 0; border-radius: 12px; padding: 9px 10px; transition: background .16s ease; }
+.fr-person + .fr-person { border-top: 1px solid var(--line); border-radius: 0 0 12px 12px; }
+.fr-person:hover, .fr-person:focus-visible { background: rgba(255, 255, 255, .05); outline: none; }
+.fr-person .fr-acts { gap: 6px; }
+.fr-person .rank-main small {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fr-ico {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .04);
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.fr-ico:hover { color: var(--ink); border-color: var(--line-2); background: rgba(255, 255, 255, .1); }
+
+@media (min-width: 901px) {
+  body.is-friends .overlay-card { width: min(1180px, 100%); }
+  body.is-friends #overlayBody {
+    display: grid;
+    grid-template-columns: minmax(0, 372px) minmax(0, 1fr);
+    gap: 30px;
+    align-items: start;
+  }
+
+  /* a beszélgetés jobb oldali panele */
+  .fr-detail {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 460px;
+    padding: 16px 18px 18px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, .02);
+  }
+  .fr-detail .chat-head { margin-top: 0; }
+  .fr-detail .chat-head .fr-back { display: none; }
+  .fr-detail .chat-msgs { max-height: 54vh; }
+  .fr-detail .chat-form { margin-top: auto; }
+
+  .fr-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: 1;
+    min-height: 300px;
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--ink-3);
+  }
+  .fr-empty svg { color: var(--accent-hi); opacity: .7; }
+  .fr-empty b { font-family: var(--display); font-size: 15px; font-weight: 600; color: var(--ink-2); }
+  .fr-empty span { font-size: 12.5px; line-height: 1.5; max-width: 260px; }
+
+  /* a sor műveletei csak hoverre jönnek elő */
+  .fr-person .fr-acts { opacity: 0; transform: translateX(4px); transition: opacity .16s ease, transform .16s ease; }
+  .fr-person:hover .fr-acts,
+  .fr-person:focus-within .fr-acts { opacity: 1; transform: none; }
+}
+
+/* ===================== v14: chat részletek, aktivitás, bökések ===================== */
+
+/* nap-elválasztó a beszélgetésben */
+.msg-day,
+.msg-unread {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.msg-day::before,
+.msg-day::after,
+.msg-unread::before,
+.msg-unread::after { content: ''; height: 1px; flex: 1; background: var(--line); }
+.msg-unread { color: var(--accent-hi); }
+.msg-unread::before,
+.msg-unread::after { background: rgba(44, 134, 184, .45); }
+
+/* chat: görgető + „ugrás a legújabbra” gomb */
+.chat-wrap { position: relative; display: flex; flex-direction: column; min-height: 0; }
+.chat-jump {
+  position: absolute;
+  right: 8px;
+  bottom: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-2);
+  background: rgba(12, 18, 25, .86);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 10px 24px -12px #000;
+  transition: transform .15s ease, border-color .15s ease;
+}
+.chat-jump:hover { transform: translateY(-1px); border-color: rgba(44, 134, 184, .6); }
+.chat-jump[hidden] { display: none !important; }
+
+/* növekvő beviteli mező (Enter = küldés, Shift+Enter = új sor) */
+.chat-form { align-items: flex-end; }
+.chat-form textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  max-height: 120px;
+  padding: 11px 13px;
+  resize: none;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .05);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.chat-form textarea:focus { outline: none; border-color: rgba(44, 134, 184, .55); }
+.chat-form .btn { height: 42px; }
+
+/* aktív pötty az avataron */
+.fr-av { position: relative; }
+.fr-av.is-on::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 2px solid #0A1017;
+}
+.chat-head small.is-on { color: var(--green); }
+
+/* bökések kártya */
+.fr-pokes {
+  margin-top: 14px;
+  padding: 12px 14px 4px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .03);
+}
+.fr-pokes .fr-req .fr-av { border-color: rgba(255, 255, 255, .14); }
+
+/* ===================== v15: design tokenek + üveg-recept + ikonok ===================== */
+/* Egy helyen a skálák. A komponensek innen dolgoznak, így minden
+   térköz 4/8/12/16/24/32, minden betűméret a 6 fokozatú skálából való. */
+
+:root {
+  /* térköz (8 px rács) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+
+  /* tipográfiai skála */
+  --t1: 11px;
+  --t2: 13px;
+  --t3: 15px;
+  --t4: 20px;
+  --t5: 30px;
+  --t6: 40px;
+
+  /* sugarak */
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 18px;
+
+  /* mélység */
+  --e1: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 10px -6px rgba(0, 0, 0, .7);
+  --e2: 0 10px 30px -14px rgba(0, 0, 0, .85), 0 2px 8px -4px rgba(0, 0, 0, .6);
+  --e3: 0 28px 60px -24px rgba(0, 0, 0, .95), 0 6px 18px -10px rgba(0, 0, 0, .7);
+
+  /* üveg: 3 szint, mindegyikhez háttér + él + belső fény */
+  --blur-1: 10px;
+  --blur-2: 14px;
+  --blur-3: 18px;
+  --g1: rgba(255, 255, 255, .035);
+  --g2: rgba(12, 17, 24, .72);
+  --g3: rgba(10, 14, 20, .84);
+  --g-brd-1: rgba(255, 255, 255, .07);
+  --g-brd-2: rgba(255, 255, 255, .1);
+  --g-brd-3: rgba(255, 255, 255, .15);
+  --g-hi-1: inset 0 1px 0 rgba(255, 255, 255, .05);
+  --g-hi-2: inset 0 1px 0 rgba(255, 255, 255, .1);
+  --g-hi-3: inset 0 1px 0 rgba(255, 255, 255, .15);
+
+  /* másodlagos szöveg: kontrasztosabb a sötét háttéren */
+  --ink-3: #7C8492;
+}
+
+/* --- üveg 3: chrome (panel, útvonal-kártya, kereső) --- */
+.panel {
+  background: var(--g3);
+  backdrop-filter: blur(var(--blur-3)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(160%);
+  border: 1px solid var(--g-brd-3);
+  box-shadow: var(--e3), var(--g-hi-3);
+  border-radius: var(--r-lg);
+}
+.qbar,
+.route-card {
+  background: var(--g3);
+  backdrop-filter: blur(var(--blur-3)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--blur-3)) saturate(160%);
+  border: 1px solid var(--g-brd-2);
+  box-shadow: var(--e2), var(--g-hi-2);
+  border-radius: var(--r-lg);
+}
+
+/* --- üveg 2: lebegő vezérlők --- */
+.chat-jump {
+  background: var(--g2);
+  backdrop-filter: blur(var(--blur-2)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(160%);
+  border: 1px solid var(--g-brd-2);
+  box-shadow: var(--e1);
+}
+
+/* --- üveg 1: kártyák a felületen belül --- */
+.fr-detail,
+.fr-reqs,
+.fr-pokes {
+  background: var(--g1);
+  border: 1px solid var(--g-brd-1);
+  box-shadow: var(--g-hi-1);
+  border-radius: var(--r-lg);
+}
+.fr-req { padding: var(--s2) 0; }
+.fr-person { padding: var(--s2) 10px; }
+
+/* --- ikonok: 24 px rács, 1,7 px vonal, mindig blokk-szinten --- */
+.fr-av svg,
+.fr-ico svg { display: block; }
+.fr-av { color: var(--ink-2); }
+.fr-av.is-on { color: var(--ink); }
+
+@media (min-width: 901px) {
+  /* a dokk ugyanaz az üveg, kisebb blúrrel (gyorsabb, egységes) */
+  .dock {
+    backdrop-filter: blur(var(--blur-3)) saturate(190%) brightness(1.06);
+    -webkit-backdrop-filter: blur(var(--blur-3)) saturate(190%) brightness(1.06);
+  }
+
+  /* a Legközelebbi gomb: az ikon pontosan a kör közepén */
+  .stage > .btn-sos {
+    display: grid;
+    place-items: center;
+    padding: 0;
+    line-height: 0;
+  }
+  .stage > .btn-sos svg {
+    display: block;
+    margin: 0;
+    width: 18px;
+    height: 18px;
+  }
+  /* a mobil ikon (villám) PC-n nem kell – különben két ikon lenne a körben */
+  .stage > .btn-sos .ico-bolt { display: none; }
+}
