@@ -75,11 +75,88 @@
       <div class="search-suggest" id="searchSuggest" hidden></div>
 
       <div class="search-actions">
-        <button class="btn btn-ghost" id="locateBtn" type="button">
-          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.99 8.99 0 0 0 13 3.06V1h-2v2.06A8.99 8.99 0 0 0 3.06 11H1v2h2.06A8.99 8.99 0 0 0 11 20.94V23h2v-2.06A8.99 8.99 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 0 1-7-7 7 7 0 0 1 7-7 7 7 0 0 1 7 7 7 7 0 0 1-7 7z" fill="currentColor"/></svg>
+        <button class="pill pill-locate" id="locateBtn" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 21.5s7-6 7-11a7 7 0 1 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10.2" r="2.6"/></svg>
           Itt vagyok
         </button>
-        <button class="btn btn-ghost" id="resetBtn" type="button">Alaphelyzet</button>
+        <button class="pill pill-lists" id="listsBtn" type="button" aria-expanded="false" aria-controls="listsPop">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h11M4 12h11M4 17.5h7"/><path d="M18.5 15.2v5M16 17.7h5"/></svg>
+          Listák<i class="ft-n" id="listsCount" hidden></i>
+        </button>
+        <button class="pill pill-filter" id="filterToggle" type="button" aria-expanded="false" aria-controls="filterPop">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
+          Szűrők<i class="ft-n" id="filterCount" hidden></i>
+        </button>
+      </div>
+
+      <div class="active-filters" id="activeFilters" hidden></div>
+
+
+      <div class="filter-pop" id="filterPop" hidden role="dialog" aria-label="Szűrők">
+        <div class="fp-head">
+          <b>Szűrők</b>
+          <button class="fp-x" id="filterClose" type="button" aria-label="Bezárás">✕</button>
+        </div>
+
+        <div class="fp-sec">
+          <span class="fp-label">Kategória és állapot</span>
+          <div class="filters" role="group" aria-label="Szűrők">
+            <button class="chip is-active" data-filter="all" type="button">Összes</button>
+            <button class="chip chip-auto" data-filter="automata" type="button">Automata</button>
+            <button class="chip chip-kezi" data-filter="kezi" type="button">Kézi</button>
+            <button class="chip chip-open" data-filter="open" type="button">Most nyitva</button>
+            <button class="chip chip-rate" data-filter="rated" type="button">Értékelt</button>
+            <button class="chip chip-fav" data-filter="fav" type="button">★ Kedvencek</button>
+          </div>
+        </div>
+
+        <div class="fp-sec">
+          <span class="fp-label">Távolság</span>
+          <div class="dist-row" id="distRow" role="group" aria-label="Távolság">
+            <button class="dist is-active" data-dist="0" type="button">Mind</button>
+            <button class="dist" data-dist="1" type="button">1 km</button>
+            <button class="dist" data-dist="3" type="button">3 km</button>
+            <button class="dist" data-dist="5" type="button">5 km</button>
+            <button class="dist" data-dist="10" type="button">10 km</button>
+          </div>
+        </div>
+
+        <div class="fp-sec">
+          <span class="fp-label">Rendezés</span>
+          <div class="sortbar" id="sortbar" role="group" aria-label="Rendezés">
+            <button class="sort is-active" data-sort="dist" type="button">Távolság</button>
+            <button class="sort" data-sort="rating" type="button">Legjobbra értékelt</button>
+          </div>
+        </div>
+
+        <div class="fp-foot">
+          <button class="pill pill-ghost" id="filterReset" type="button">Törlés</button>
+          <button class="pill pill-primary" id="filterDone" type="button">Kész</button>
+        </div>
+      </div>
+
+      <div class="filter-pop lists-pop" id="listsPop" hidden role="dialog" aria-label="Listák">
+        <div class="fp-head">
+          <b>Listák</b>
+          <button class="fp-x" id="listsClose" type="button" aria-label="Bezárás">✕</button>
+        </div>
+        <div class="lists-row" id="listsRow" hidden></div>
+        <div class="sv-empty" id="listsEmpty">Még nincs listád – ments egy pontot a „Mentés” gombbal.</div>
+      </div>
+
+      <div class="filter-pop save-pop" id="savePop" hidden role="dialog" aria-label="Mentés listára">
+        <div class="fp-head">
+          <b>Mentés listára</b>
+          <button class="fp-x" id="saveClose" type="button" aria-label="Bezárás">✕</button>
+        </div>
+        <button class="sv-row" id="saveFavRow" type="button">
+          <span class="sv-check"></span><span class="sv-name">★ Kedvencek</span>
+        </button>
+        <div id="saveLists"></div>
+        <form class="sv-new" id="saveNewForm">
+          <input id="saveNewInput" type="text" maxlength="24" placeholder="Új lista neve…" aria-label="Új lista neve">
+          <button type="submit" aria-label="Lista létrehozása">+</button>
+        </form>
       </div>
     </div>
 
@@ -93,29 +170,18 @@
       <button class="btn btn-primary recent-go" id="recentGo" type="button">Útvonal</button>
     </div>
 
-    <!-- Szűrők -->
-    <div class="filters" role="group" aria-label="Szűrők">
-      <button class="chip is-active" data-filter="all" type="button">Összes</button>
-      <button class="chip chip-auto" data-filter="automata" type="button">Automata</button>
-      <button class="chip chip-kezi" data-filter="kezi" type="button">Kézi</button>
-      <button class="chip chip-open" data-filter="open" type="button">Most nyitva</button>
-      <button class="chip chip-rate" data-filter="rated" type="button">Értékelt</button>
-      <button class="chip chip-fav" data-filter="fav" type="button">★ Kedvencek</button>
-    </div>
-
-    <!-- Rendezés -->
-    <div class="sortbar" id="sortbar" role="group" aria-label="Rendezés">
-      <span class="sortbar-label">Rendezés</span>
-      <button class="sort is-active" data-sort="dist" type="button">Távolság</button>
-      <button class="sort" data-sort="rating" type="button">Legjobbra értékelt</button>
-    </div>
 
     <!-- Találatok -->
     <div class="results-head">
       <span id="resultsLabel">Legközelebbi pontok</span>
       <span class="results-count" id="resultsCount"></span>
     </div>
-    <div class="results" id="results" role="list"></div>
+    <div class="results" id="results" role="list">
+      <div class="sk-card"><span class="sk-dot"></span><span class="sk-lines"><i></i><i></i><i></i></span></div>
+      <div class="sk-card"><span class="sk-dot"></span><span class="sk-lines"><i></i><i></i><i></i></span></div>
+      <div class="sk-card"><span class="sk-dot"></span><span class="sk-lines"><i></i><i></i><i></i></span></div>
+      <div class="sk-card"><span class="sk-dot"></span><span class="sk-lines"><i></i><i></i><i></i></span></div>
+    </div>
   </aside>
 
   <!-- ================= Útvonal-kártya ================= -->
@@ -131,15 +197,15 @@
 
     <div class="route-modes" id="routeModes" role="group" aria-label="Közlekedési mód">
       <button class="rmode is-active" data-mode="driving" type="button">
-        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M18.9 6.5A1.5 1.5 0 0 0 17.5 5h-11a1.5 1.5 0 0 0-1.4 1L3.2 12c-.4 1.4.2 2.9 1.5 3.4V19a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h8.6v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-3.6c1.3-.5 1.9-2 1.5-3.4l-1.9-5.5zM6.5 16A1.5 1.5 0 1 1 8 14.5 1.5 1.5 0 0 1 6.5 16zm11 0a1.5 1.5 0 1 1 1.5-1.5 1.5 1.5 0 0 1-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" fill="currentColor"/></svg>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 16.5v2.2a1 1 0 0 0 1 1h1.2a1 1 0 0 0 1-1v-1.4h8.6v1.4a1 1 0 0 0 1 1h1.2a1 1 0 0 0 1-1v-2.2"/><path d="M3.4 16.5v-3.1L5.2 7.6A1.6 1.6 0 0 1 6.7 6.5h10.6a1.6 1.6 0 0 1 1.5 1.1l1.8 5.8v3.1A1 1 0 0 1 19.6 17H4.4a1 1 0 0 1-1-.5z"/><circle cx="7.2" cy="15" r="1.1"/><circle cx="16.8" cy="15" r="1.1"/></svg>
         Autó
       </button>
       <button class="rmode" data-mode="cycling" type="button">
-        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M15.5 5.5a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm-3.6 4.5L9.4 6.9l1.2-2.1a3 3 0 0 0-1.1.3A5 5 0 1 0 14.4 16l-2.5-6zm-6.4 8A3.5 3.5 0 1 1 9 18.5 3.5 3.5 0 0 1 5.5 18zm13 0a3.5 3.5 0 1 1-3.5-3.5 3.5 3.5 0 0 1 3.5 3.5z" fill="currentColor"/></svg>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.8" cy="17.2" r="3.4"/><circle cx="18.2" cy="17.2" r="3.4"/><path d="M9.2 17.2h5.6l-2.4-6.2-2 2.6H6.2M14 6.4h2.4l1.8 4.6"/></svg>
         Kerékpár
       </button>
       <button class="rmode" data-mode="foot" type="button">
-        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M13.5 5.5a2 2 0 1 0-2-2 2 2 0 0 0 2 2zM9.8 22l1-5.5 2 2v5h2v-5.7l-2.1-2 .6-3A7.3 7.3 0 0 0 17 14v-2a5 5 0 0 1-3.8-2.4l-1-1.6a2 2 0 0 0-1.8-.9 2 2 0 0 0-1.7 1.3L7.2 12A4 4 0 0 0 9.4 15l-.8 7z" fill="currentColor"/></svg>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.4" cy="4.4" r="1.9"/><path d="M10.6 21.5l1.1-5.4 1.9 1.9v3.5M11.5 16.2l-1-4.3-2.2 2.4-1.6 3.4M10.5 11.9l1.9-2.6 2.6 2.4 2.4.7"/></svg>
         Gyalog
       </button>
     </div>
@@ -178,11 +244,10 @@
 
     <div class="route-actions">
       <button class="btn btn-primary btn-start" id="routeStart" type="button">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 2.6 21.4 21.4 12 17.1 2.6 21.4z" fill="currentColor"/></svg>
         Indítás
       </button>
       <button class="btn btn-ghost" id="routeDetail" type="button">Részletek</button>
-      <a class="btn btn-ghost" id="routeGo" href="#" target="_blank" rel="noopener">Google</a>
     </div>
   </div>
 
@@ -205,7 +270,7 @@
     <div class="qbar" id="qbar" hidden>
       <div class="qbar-list" id="qbarList"></div>
       <button class="qbar-go" id="qbarGo" type="button" title="Indítás a legközelebbi ponthoz">
-        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 2.6 21.4 21.4 12 17.1 2.6 21.4z" fill="currentColor"/></svg>
       </button>
     </div>
   </div>
@@ -599,6 +664,17 @@
     </div>
   </div>
 
+  <div class="sheet-actions">
+    <button class="btn btn-primary sheet-route-btn" id="sheetRoute" type="button">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M12 20.6s6.6-6.1 6.6-10.6a6.6 6.6 0 1 0-13.2 0c0 4.5 6.6 10.6 6.6 10.6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="9.8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+      Útvonal ide
+    </button>
+    <button class="btn btn-ghost sheet-save-btn" id="sheetSave" type="button" aria-label="Mentés listára">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 4.6l2.3 4.7 5.2.7-3.8 3.7.9 5.1-4.6-2.4-4.6 2.4.9-5.1L4.5 10l5.2-.7z"/></svg>
+      Mentés
+    </button>
+  </div>
+
   <div class="hours-block" id="hoursBlock">
     <div class="hours-card" id="hoursCard" role="dialog" aria-modal="true" aria-label="Nyitvatartás">
       <button class="hours-pop-close" id="hoursClose" type="button" aria-label="Nyitvatartás bezárása">✕</button>
@@ -608,13 +684,6 @@
       </table>
       <button class="hours-toggle" id="hoursToggle" type="button" aria-expanded="false">Teljes nyitvatartás</button>
     </div>
-  </div>
-
-  <div class="sheet-actions">
-    <button class="btn btn-primary sheet-route-btn" id="sheetRoute" type="button">
-      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M12 20.6s6.6-6.1 6.6-10.6a6.6 6.6 0 1 0-13.2 0c0 4.5 6.6 10.6 6.6 10.6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="9.8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
-      Útvonal ide
-    </button>
   </div>
 
   <!-- ============ Üzemállapot ============ -->

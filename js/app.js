@@ -45,6 +45,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     filter: 'all',
     sort: 'dist',
     query: '',
+    maxD: 0,          // max távolság km-ben (0 = mindegy)
+    terms: [],        // az aktuális keresőszó normalizált tokenjei
+    lists: [],        // mentett listák (gyűjtemények)
+    listId: null,     // aktív lista-szűrő
     me: null,
     sosList: [],
     sosIndex: 0,
@@ -66,6 +70,80 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   function stripAcc(s) {
     return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  /* --- okos keresés: ékezet-, elgépelés- és rövidítés-tűrő --- */
+
+  // igaz, ha a két szó legfeljebb egy eltérésben van (beszúrás/törlés/csere)
+  function lev1(a, b) {
+    if (a === b) return true;
+    var la = a.length, lb = b.length;
+    if (Math.abs(la - lb) > 1) return false;
+    var i = 0, j = 0, diff = 0;
+    while (i < la && j < lb) {
+      if (a[i] === b[j]) { i++; j++; continue; }
+      if (++diff > 1) return false;
+      if (la > lb) i++;
+      else if (lb > la) j++;
+      else { i++; j++; }
+    }
+    return true;
+  }
+
+  // elgépelés-tűrés: a keresett tokenhez hasonló szó van-e a pont szövegében
+  function nearWord(tok, hay) {
+    if (tok.length < 4) return false;
+    var words = hay.split(/[^a-z0-9]+/), i;
+    for (i = 0; i < words.length; i++) {
+      var w = words[i];
+      if (w.length > 3 && lev1(tok, w)) return true;
+    }
+    return false;
+  }
+
+  // márkanevek és rövidítések: mindkét alak megtalálja a pontot
+  function extraHay(p) {
+    var s = ' ', addr = stripAcc((p.address || '') + ' ' + (p.city || '')), n = stripAcc(p.name || '');
+    if (/\bu\b|utca/.test(addr)) s += 'utca u ut ';
+    if (/krt|korut/.test(addr)) s += 'korut krt ';
+    if (/\bter\b|\btere\b/.test(addr)) s += 'ter tere ';
+    if (/spar|interspar/.test(n)) s += 'spar interspar partner supermarket ';
+    if (/eco/.test(n)) s += 'ecofamily eco family ';
+    if (/coop/.test(n)) s += 'coop szupermarket ';
+    if (/penny/.test(n)) s += 'penny market ';
+    if (/lidl/.test(n)) s += 'lidl ';
+    if (/aldi/.test(n)) s += 'aldi ';
+    if (/tesco/.test(n)) s += 'tesco ';
+    return s;
+  }
+
+  // a keresett szöveget kiemelő HTML (ékezet-független egyezéssel)
+  function hitHtml(text, terms) {
+    var raw = String(text == null ? '' : text);
+    if (!terms || !terms.length) return esc(raw);
+    var low = stripAcc(raw), ranges = [];
+    terms.forEach(function (t) {
+      if (t.length < 2) return;
+      var from = 0, at;
+      while ((at = low.indexOf(t, from)) !== -1) {
+        ranges.push([at, at + t.length]);
+        from = at + t.length;
+      }
+    });
+    if (!ranges.length) return esc(raw);
+    ranges.sort(function (a, b) { return a[0] - b[0]; });
+    var merged = [];
+    ranges.forEach(function (r) {
+      var last = merged[merged.length - 1];
+      if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+      else merged.push(r.slice());
+    });
+    var out = '', pos = 0;
+    merged.forEach(function (r) {
+      out += esc(raw.slice(pos, r[0])) + '<mark class="hit">' + esc(raw.slice(r[0], r[1])) + '</mark>';
+      pos = r[1];
+    });
+    return out + esc(raw.slice(pos));
   }
 
   function debounce(fn, ms) {
@@ -2582,7 +2660,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.routeDist.textContent = '…';
     el.routeTime.textContent = '…';
     if (el.routeFuel) el.routeFuel.hidden = true;
-    el.routeGo.href = NAV_GOOGLE + p.lat + ',' + p.lng;
+    if (el.routeGo) el.routeGo.href = NAV_GOOGLE + p.lat + ',' + p.lng;
     Array.prototype.forEach.call(el.routeModes.children, function (b) {
       b.classList.toggle('is-active', b.dataset.mode === mode);
     });
@@ -3024,8 +3102,35 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     var terms = stripAcc(state.query.trim()).split(/\s+/).filter(Boolean);
     var now = new Date();
     var store = loadFbStore();
+    state.terms = terms;
 
-    var list = state.points.filter(function (p) {
+    // távolság minden pontra – a szűrő, a rendezés és a lista is ezt használja
+    if (state.me) {
+      state.points.forEach(function (p) { p._d = dist(state.me.lat, state.me.lng, p.lat, p.lng); });
+    }
+
+    // 1) keresőszó + távolság = közös alap
+    var base = state.points.filter(function (p) {
+      if (state.maxD > 0 && p._d != null && p._d > state.maxD * 1000) return false;
+      for (var i = 0; i < terms.length; i++) {
+        if (p._hay.indexOf(terms[i]) === -1 && !nearWord(terms[i], p._hay)) return false;
+      }
+      return true;
+    });
+
+    // 2) chipek darabszámai (a kiválasztott szűrő nélkül)
+    var counts = { all: base.length, automata: 0, kezi: 0, open: 0, rated: 0, fav: 0 };
+    base.forEach(function (p) {
+      if (p.type === 'automata') counts.automata++; else counts.kezi++;
+      var st = statusOf(p, now);
+      if (st === 'open' || st === 'soon') counts.open++;
+      if (store[p.id]) counts.rated++;
+      if (isFav(p.id)) counts.fav++;
+    });
+    renderChipCounts(counts);
+
+    // 3) a kiválasztott szűrő
+    var list = base.filter(function (p) {
       if (state.filter === 'automata' && p.type !== 'automata') return false;
       if (state.filter === 'kezi' && p.type !== 'kezi') return false;
       if (state.filter === 'open') {
@@ -3034,18 +3139,28 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       }
       if (state.filter === 'rated' && !store[p.id]) return false;
       if (state.filter === 'fav' && !isFav(p.id)) return false;
-      for (var i = 0; i < terms.length; i++) {
-        if (p._hay.indexOf(terms[i]) === -1) return false;
-      }
       return true;
     });
 
-    if (state.me) {
-      list.forEach(function (p) { p._d = dist(state.me.lat, state.me.lng, p.lat, p.lng); });
+    // 3b) mentett lista szűrő
+    if (state.listId) {
+      var L = (state.lists || []).filter(function (l) { return l.id === state.listId; })[0];
+      var ids = L ? L.ids : [];
+      list = list.filter(function (p) { return ids.indexOf(p.id) > -1; });
     }
+    renderLists();
+
+    // 4) találati erősség: név eleji > névben > bárhol a szövegben
+    var t0 = terms[0];
+    list.forEach(function (p) {
+      if (!t0) { p._rel = 0; return; }
+      var n = stripAcc(p.name);
+      p._rel = n.indexOf(t0) === 0 ? 3 : (n.indexOf(t0) > -1 ? 2 : (p._hay.indexOf(t0) > -1 ? 1 : 0));
+    });
 
     if (state.sort === 'rating') {
       list.sort(function (a, b) {
+        if (b._rel !== a._rel) return b._rel - a._rel;
         var ka = communityOf(a.id), kb = communityOf(b.id);
         var ra = store[a.id] ? store[a.id].score : (ka ? ka.avg : -1);
         var rb = store[b.id] ? store[b.id].score : (kb ? kb.avg : -1);
@@ -3053,7 +3168,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         return (a._d || 1e12) - (b._d || 1e12);
       });
     } else if (state.me) {
-      list.sort(function (a, b) { return a._d - b._d; });
+      list.sort(function (a, b) {
+        if (a._rel !== b._rel) return b._rel - a._rel;
+        return (a._d || 1e12) - (b._d || 1e12);
+      });
     }
 
     // az első három (távolság szerint) kap sorszámot a térképen
@@ -3064,6 +3182,89 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     state.filtered = list;
     render(store);
+  }
+
+  var FILTER_LABEL = { all: 'Összes', automata: 'Automata', kezi: 'Kézi', open: 'Most nyitva', rated: 'Értékelt', fav: 'Kedvencek' };
+
+  function syncFilterCount() {
+    var n = 0;
+    if (state.filter !== 'all') n++;
+    if (state.maxD > 0) n++;
+    if (state.sort === 'rating') n++;
+    if (el.filterCount) {
+      el.filterCount.hidden = !n;
+      el.filterCount.textContent = n ? String(n) : '';
+    }
+    renderActiveFilters();
+  }
+
+  // a szűrő gomb mellett látszó, egy koppintással törölhető szűrők
+  function renderActiveFilters() {
+    var box = el.activeFilters;
+    if (!box) return;
+    var out = '';
+    if (state.filter !== 'all') {
+      out += '<button class="af" type="button" data-rm="filter">' + (FILTER_LABEL[state.filter] || 'Szűrő') + ' ✕</button>';
+    }
+    if (state.maxD > 0) out += '<button class="af" type="button" data-rm="dist">' + state.maxD + ' km-en belül ✕</button>';
+    if (state.sort === 'rating') out += '<button class="af" type="button" data-rm="sort">Legjobbra értékelt ✕</button>';
+    if (state.listId) {
+      var L = (state.lists || []).filter(function (l) { return l.id === state.listId; })[0];
+      if (L) out += '<button class="af" type="button" data-rm="list">' + esc(L.name) + ' ✕</button>';
+    }
+    box.innerHTML = out;
+    box.hidden = !out;
+  }
+
+  // a popup a body alá kerül, így a panel kivágása nem tudja elvágni
+  function placeFilterPop() {
+    var pop = el.filterPop;
+    if (!pop) return;
+    if (isMobile()) {
+      pop.style.left = '12px';
+      pop.style.right = '12px';
+      pop.style.width = 'auto';
+      pop.style.top = 'auto';
+      pop.style.bottom = 'calc(90px + env(safe-area-inset-bottom))';
+      return;
+    }
+    var block = document.querySelector('.search-box') || document.querySelector('.search-block');
+    if (!block) return;
+    var b = block.getBoundingClientRect();
+    pop.style.left = Math.round(b.left) + 'px';
+    pop.style.width = Math.round(b.width) + 'px';
+    pop.style.right = 'auto';
+    pop.style.top = Math.round(b.bottom + 6) + 'px';
+    pop.style.bottom = 'auto';
+  }
+
+  function setFilterPop(open) {
+    if (!el.filterPop) return;
+    if (open) {
+      if (el.filterPop.parentNode !== document.body) document.body.appendChild(el.filterPop);
+      placeFilterPop();
+    }
+    el.filterPop.hidden = !open;
+    if (open) {
+      // a panel csúszó animációja közben is a helyén maradjon
+      requestAnimationFrame(placeFilterPop);
+      setTimeout(placeFilterPop, 120);
+      setTimeout(placeFilterPop, 380);
+    }
+    if (el.filterToggle) el.filterToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  window.addEventListener('resize', function () {
+    if (el.filterPop && !el.filterPop.hidden) placeFilterPop();
+  });
+
+  function renderChipCounts(c) {
+    Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (chip) {
+      var n = c[chip.dataset.filter] || 0;
+      var badge = chip.querySelector('.chip-n');
+      if (!badge) { badge = document.createElement('i'); badge.className = 'chip-n'; chip.appendChild(badge); }
+      badge.textContent = n > 999 ? (Math.round(n / 100) / 10).toLocaleString('hu-HU') + 'k' : n;
+    });
   }
 
   function render(store) {
@@ -3080,13 +3281,18 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     var top = state.filtered.slice(0, 80);
     if (!top.length) {
-      el.results.innerHTML = '<div class="empty">' +
-        (state.filter === 'rated'
+      var msg = state.query
+        ? 'Nincs találat erre: <b>' + esc(state.query) + '</b>.<br>Próbáld: Makó, Szeged vagy egy boltnevet.'
+        : (state.filter === 'rated'
           ? 'Még nem értékeltél egy pontot sem.<br>Nyiss meg egy REpontot, és osztályozd 1–10-ig.'
           : (state.filter === 'fav'
             ? 'Még nincs kedvenc pontod.<br>Koppints a kártyán a ★ jelre, és itt megtalálod.'
-            : 'Nincs ilyen találat.<br>Próbálj másik települést vagy címet.')) +
-        '</div>';
+            : 'Nincs ilyen találat.<br>Próbálj másik települést vagy címet.'));
+      el.results.innerHTML = '<div class="empty">' + msg +
+        '<div class="empty-acts">' +
+          '<button class="btn btn-ghost" type="button" data-clear-filters>Szűrők törlése</button>' +
+          (state.query ? '<button class="btn btn-ghost" type="button" data-clear-query>Keresés törlése</button>' : '') +
+        '</div></div>';
     } else {
       el.results.innerHTML = top.map(function (p, i) { return cardHtml(p, now, i, store[p.id]); }).join('') +
         (state.filtered.length > 80
@@ -3102,32 +3308,146 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   function cardHtml(p, now, i, rating) {
     var st = statusOf(p, now);
     var sc = rating ? rating.score : null;
-    // a pont színe a saját értékelésed alapján (Budicheck-stílus)
-    var dotStyle = sc == null ? '' :
-      ';background:' + (sc >= 9 ? '#1B6D99' : (sc >= 7 ? '#F16524' : '#DA1E28')) +
-      ';box-shadow:0 0 0 4px rgba(255,255,255,.06),0 0 14px ' + (sc >= 9 ? '#1B6D99' : (sc >= 7 ? '#F16524' : '#DA1E28'));
-    return '<button class="card' + (p.id === selectedId ? ' is-sel' : '') + '" data-id="' + p.id +
-      '" role="listitem" style="--i:' + Math.min(i || 0, 14) + '">' +
-      (p._rank ? '<span class="card-rank">#' + p._rank + ' LEGKÖZELEBB</span>' : '') +
-      '<span class="card-dot ' + p.type + '"' + (dotStyle ? ' style="' + dotStyle + '"' : '') + '></span>' +
-      '<span class="card-main">' +
-        '<span class="card-name">' + esc(p.name) + '</span>' +
+    var saved = isFav(p.id) || listIdsOf(p.id).length > 0;
+    return '<div class="card' + (p.id === selectedId ? ' is-sel' : '') + '" data-id="' + p.id +
+      '" role="button" tabindex="0" style="--i:' + Math.min(i || 0, 14) + '">' +
+      (p._rank ? '<span class="card-rank">#' + p._rank + ' legközelebb</span>' : '') +
+      '<span class="card-dot ' + p.type + '"></span>' +
+      '<div class="card-main">' +
+        '<span class="card-line">' +
+          '<span class="card-name">' + hitHtml(p.name, state.terms) + '</span>' +
+          (p._d != null ? '<span class="card-dist">' + fmtDist(p._d) + '</span>' : '') +
+        '</span>' +
         '<span class="card-sub">' + esc(addrText(p)) + '</span>' +
-        '<span class="card-meta">' + openPill(st) +
+        '<span class="card-meta">' +
+          openPill(st) +
           '<span class="tag ' + p.type + '">' + (p.type === 'automata' ? 'Automata' : 'Kézi') + '</span>' +
           (rating
             ? '<span class="score ' + scoreClass(sc) + ' score-xs">' + sc + '</span>'
             : communityBadgeHtml(p.id)) +
           reportChipHtml(p.id) +
         '</span>' +
-      '</span>' +
-      (p._d != null
-        ? '<span class="card-dist">' + fmtDist(p._d) + '<small>tőled</small></span>'
-        : '') +
-      '<span class="card-fav' + (isFav(p.id) ? ' is-on' : '') + '" role="button" tabindex="0" data-fav="' + p.id +
-        '" aria-label="' + (isFav(p.id) ? 'Eltávolítás a kedvencekből' : 'Hozzáadás a kedvencekhez') + '">★</span>' +
-      '<span class="card-route">ÚTVONAL →</span>' +
-    '</button>';
+        '<span class="card-acts">' +
+          '<button class="c-btn c-btn-go card-route" type="button" data-route="' + p.id + '">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 20.6s6.6-6.1 6.6-10.6a6.6 6.6 0 1 0-13.2 0c0 4.5 6.6 10.6 6.6 10.6z"/><circle cx="12" cy="9.8" r="2.4"/></svg>' +
+            'Útvonal</button>' +
+          '<button class="c-btn c-btn-save' + (saved ? ' is-on' : '') + '" type="button" data-save="' + p.id + '" aria-label="Mentés listára">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="' + (isFav(p.id) ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 4.6l2.3 4.7 5.2.7-3.8 3.7.9 5.1-4.6-2.4-4.6 2.4.9-5.1L4.5 10l5.2-.7z"/></svg>' +
+            'Mentés</button>' +
+        '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /* --- mentett helyek / gyűjtemények --- */
+  var LISTS_KEY = 'vissza.lists.v1';
+
+  function loadLists() {
+    try {
+      var l = JSON.parse(localStorage.getItem(LISTS_KEY) || '[]');
+      if (!Array.isArray(l)) return [];
+      return l.filter(function (x) { return x && x.id && x.name && Array.isArray(x.ids); });
+    } catch (e) { return []; }
+  }
+
+  function saveLists(l) {
+    state.lists = l;
+    try { localStorage.setItem(LISTS_KEY, JSON.stringify(l)); } catch (e) { }
+  }
+
+  function listIdsOf(id) {
+    return (state.lists || []).filter(function (l) { return l.ids.indexOf(id) > -1; })
+      .map(function (l) { return l.id; });
+  }
+
+  function toggleInList(listId, pointId) {
+    var lists = loadLists();
+    var l = lists.filter(function (x) { return x.id === listId; })[0];
+    if (!l) return;
+    var at = l.ids.indexOf(pointId);
+    if (at > -1) l.ids.splice(at, 1); else l.ids.push(pointId);
+    saveLists(lists);
+  }
+
+  function createList(name, pointId) {
+    name = String(name || '').trim().slice(0, 24);
+    if (!name) return null;
+    var lists = loadLists();
+    var l = { id: 'l' + Date.now().toString(36), name: name, ids: pointId != null ? [pointId] : [] };
+    lists.unshift(l);
+    saveLists(lists);
+    return l;
+  }
+
+  function renderLists() {
+    state.lists = loadLists();
+    var lists = state.lists;
+    if (el.listsCount) {
+      el.listsCount.hidden = !lists.length;
+      el.listsCount.textContent = lists.length ? String(lists.length) : '';
+    }
+    if (el.listsEmpty) el.listsEmpty.hidden = lists.length > 0;
+    var row = el.listsRow;
+    if (!row) return;
+    if (!lists.length) { row.hidden = true; row.innerHTML = ''; return; }
+    row.hidden = false;
+    row.innerHTML = lists.map(function (l) {
+      return '<button class="list-row' + (state.listId === l.id ? ' is-on' : '') + '" type="button" data-list="' + l.id + '">' +
+        '<span class="list-row-name">' + esc(l.name) + '</span>' +
+        '<span class="list-row-n">' + l.ids.length + '</span></button>';
+    }).join('');
+  }
+
+  function setListsPop(open) {
+    if (!el.listsPop) return;
+    if (open) {
+      if (el.listsPop.parentNode !== document.body) document.body.appendChild(el.listsPop);
+      el.listsPop.hidden = false;
+      placePopAt(el.listsPop, el.listsBtn);
+    } else {
+      el.listsPop.hidden = true;
+    }
+    if (el.listsBtn) el.listsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  var savePointId = null;
+  var savePopAnchor = null;
+
+  function placePopAt(pop, anchor) {
+    var r = anchor.getBoundingClientRect();
+    pop.style.width = '284px';
+    pop.style.left = Math.max(12, Math.min(r.left, innerWidth - 296)) + 'px';
+    pop.style.top = Math.round(r.bottom + 8) + 'px';
+    pop.style.bottom = 'auto';
+    var h = pop.getBoundingClientRect().height;
+    if (r.bottom + 8 + h > innerHeight - 12) {
+      pop.style.top = Math.max(12, Math.round(r.top - h - 8)) + 'px';
+    }
+  }
+
+  function openSavePop(pointId, anchor) {
+    if (!el.savePop) return;
+    savePointId = pointId;
+    var lists = loadLists();
+    state.lists = lists;
+    el.saveLists.innerHTML = lists.length ? lists.map(function (l) {
+      var on = l.ids.indexOf(pointId) > -1;
+      return '<button class="sv-row' + (on ? ' is-on' : '') + '" type="button" data-sl="' + l.id + '">' +
+        '<span class="sv-check">' + (on ? '✓' : '') + '</span>' +
+        '<span class="sv-name">' + esc(l.name) + '</span>' +
+        '<span class="sv-n">' + l.ids.length + '</span></button>';
+    }).join('') : '<div class="sv-empty">Még nincs listád – hozz létre egyet lent.</div>';
+    var fav = isFav(pointId);
+    el.saveFavRow.classList.toggle('is-on', fav);
+    el.saveFavRow.querySelector('.sv-check').textContent = fav ? '✓' : '';
+    if (el.savePop.parentNode !== document.body) document.body.appendChild(el.savePop);
+    el.savePop.hidden = false;
+    placePopAt(el.savePop, anchor);
+    el.saveNewInput.value = '';
+  }
+
+  function closeSavePop() {
+    if (el.savePop) el.savePop.hidden = true;
   }
 
   function renderQbar(now) {
@@ -3140,7 +3460,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         scoreBadge(scoreOf(p.id)) +
         '<span class="qbar-text">' +
           '<b>' + esc(p.name) + '</b>' +
-          '<small>' + fmtDist(p._d) + '<span class="qbar-city"> · ' + esc(p.city || addrText(p)) + '</span></small>' +
+          '<small><b>' + fmtDist(p._d) + '</b></small>' +
         '</span>' +
       '</button>';
     }).join('');
@@ -3789,19 +4109,165 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     }
   }, 320);
 
-  function showSuggest(items) {
-    if (!items.length) { hideSuggest(); return; }
-    el.searchSuggest.innerHTML = items.map(function (it, i) {
-      return '<button type="button" data-i="' + i + '">' + esc(it.main) +
-        (it.sub ? '<span class="sub">' + esc(it.sub) + '</span>' : '') + '</button>';
-    }).join('');
-    el.searchSuggest._items = items;
+  /* --- kereső legördülő: pontok, helyek, előzmények --- */
+  var sug = { items: [], idx: -1, places: [] };
+
+  function searchHistory() {
+    try { return (JSON.parse(localStorage.getItem('vissza.search.v1') || '[]') || []).slice(0, 6); }
+    catch (e) { return []; }
+  }
+
+  function pushHistory(q) {
+    q = String(q || '').trim();
+    if (q.length < 2) return;
+    var h = searchHistory().filter(function (x) { return stripAcc(x) !== stripAcc(q); });
+    h.unshift(q);
+    try { localStorage.setItem('vissza.search.v1', JSON.stringify(h.slice(0, 6))); } catch (e) { }
+  }
+
+  function clearHistory() {
+    try { localStorage.removeItem('vissza.search.v1'); } catch (e) { }
+  }
+
+  // a legjobb helyi találatok a legördülőhöz
+  function localHits(q, n) {
+    var terms = stripAcc(String(q || '')).split(/\s+/).filter(Boolean);
+    var out = [];
+    if (!terms.length) return out;
+    var t0 = terms[0];
+    for (var i = 0; i < state.points.length; i++) {
+      var p = state.points[i], ok = true;
+      for (var k = 0; k < terms.length; k++) {
+        if (p._hay.indexOf(terms[k]) === -1 && !nearWord(terms[k], p._hay)) { ok = false; break; }
+      }
+      if (!ok) continue;
+      var nm = stripAcc(p.name);
+      p._sug = nm.indexOf(t0) === 0 ? 3 : (nm.indexOf(t0) > -1 ? 2 : 1);
+      out.push(p);
+    }
+    out.sort(function (a, b) {
+      if (b._sug !== a._sug) return b._sug - a._sug;
+      return (a._d || 1e12) - (b._d || 1e12);
+    });
+    return out.slice(0, n || 5);
+  }
+
+  var SG_CLOCK = '<svg class="sg-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.6V12l3 1.9"/></svg>';
+  var SG_PIN = '<svg class="sg-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6.5-5.6 6.5-10.3A6.5 6.5 0 0 0 5.5 10.7C5.5 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.3"/></svg>';
+
+  function renderSuggest() {
+    var q = el.searchInput.value.trim();
+    var terms = stripAcc(q).split(/\s+/).filter(Boolean);
+    var items = [], html = '';
+
+    if (!q) {
+      var hist = searchHistory();
+      if (hist.length) {
+        html += '<div class="sg-sec">Legutóbbi keresések<button class="sg-clear" type="button" data-sg="clear-hist">Törlés</button></div>';
+        hist.forEach(function (h) {
+          items.push({ kind: 'hist', q: h });
+          html += '<button type="button" class="sg-item" data-i="' + (items.length - 1) + '">' + SG_CLOCK +
+            '<span class="sg-main">' + esc(h) + '</span><span class="sg-key">↵</span></button>';
+        });
+      }
+    } else {
+      var pts = localHits(q, 5);
+      if (pts.length) {
+        html += '<div class="sg-sec">Pontok</div>';
+        pts.forEach(function (p) {
+          items.push({ kind: 'point', id: p.id });
+          var d = p._d != null ? fmtDist(p._d) : '';
+          html += '<button type="button" class="sg-item" data-i="' + (items.length - 1) + '" data-point="' + p.id + '">' +
+            '<span class="sg-dot ' + p.type + '"></span>' +
+            '<span class="sg-main">' + hitHtml(p.name, terms) + '</span>' +
+            '<span class="sg-sub">' + esc([d, p.city].filter(Boolean).join(' · ')) + '</span></button>';
+        });
+      }
+      var places = sug.places || [];
+      if (places.length) {
+        html += '<div class="sg-sec">Helyek</div>';
+        places.forEach(function (it) {
+          items.push({ kind: 'place', item: it });
+          html += '<button type="button" class="sg-item" data-i="' + (items.length - 1) + '">' + SG_PIN +
+            '<span class="sg-main">' + esc(it.main) + '</span>' +
+            (it.sub ? '<span class="sg-sub">' + esc(it.sub) + '</span>' : '') + '</button>';
+        });
+      }
+      if (!items.length) {
+        html = '<div class="sg-empty">Nincs találat – próbáld: <b>Makó</b>, <b>Szeged</b> vagy egy boltnevet.</div>';
+      } else {
+        html += '<button type="button" class="sg-all" data-sg="all">Összes találat megtekintése</button>';
+      }
+    }
+
+    if (!html) { hideSuggest(); return; }
+    sug.items = items;
+    sug.idx = -1;
+    el.searchSuggest.innerHTML = html;
     el.searchSuggest.hidden = false;
+  }
+
+  function moveSuggest(dir) {
+    var btns = el.searchSuggest.querySelectorAll('.sg-item');
+    if (!btns.length) return;
+    sug.idx = (sug.idx + dir + btns.length) % btns.length;
+    Array.prototype.forEach.call(btns, function (b, i) { b.classList.toggle('is-sel', i === sug.idx); });
+    var cur = btns[sug.idx];
+    if (cur) {
+      cur.scrollIntoView({ block: 'nearest' });
+      if (cur.dataset.point) previewPointOnMap(+cur.dataset.point);
+    }
+  }
+
+  // hover / billentyű: a térkép odarepül a találathoz
+  function previewPointOnMap(id) {
+    var p = state.byId.get(id);
+    if (!p || !map) return;
+    if (!p._d && state.me) p._d = dist(state.me.lat, state.me.lng, p.lat, p.lng);
+    map.easeTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 15), duration: 420 });
+  }
+
+  function pickSuggest(it) {
+    if (!it) return;
+    hideSuggest();
+    if (it.kind === 'point') {
+      pushHistory(el.searchInput.value.trim() || (state.byId.get(it.id) || {}).name || '');
+      hideSuggest();
+      stopRoute();
+      setSearchOpen(false);
+      select(it.id, {});
+      return;
+    }
+    if (it.kind === 'place') {
+      var pl = it.item;
+      pushHistory(pl.main);
+      el.searchInput.value = pl.main;
+      el.searchClear.hidden = false;
+      state.query = pl.main;
+      applyFilters();
+      map.easeTo({ center: [pl.lng, pl.lat], zoom: 14, duration: 800 });
+      return;
+    }
+    if (it.kind === 'hist') {
+      el.searchInput.value = it.q;
+      el.searchClear.hidden = false;
+      state.query = it.q;
+      applyFilters();
+      renderSuggest();
+    }
+  }
+
+  function showSuggest(items) {
+    sug.places = (items || []).map(function (it) { return it; });
+    renderSuggest();
   }
 
   function hideSuggest() {
     el.searchSuggest.hidden = true;
     el.searchSuggest.innerHTML = '';
+    sug.items = [];
+    sug.idx = -1;
+    sug.places = [];
   }
 
   /* ==================== adat ==================== */
@@ -3814,7 +4280,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       state.points = points;
       state.byId.clear();
       state.points.forEach(function (p) {
-        p._hay = stripAcc([p.name, p.address, p.city, p.zip].filter(Boolean).join(' '));
+        p._hay = stripAcc([p.name, p.address, p.city, p.zip].filter(Boolean).join(' ')) + extraHay(p);
         state.byId.set(p.id, p);
       });
       ready.data = true;
@@ -3923,10 +4389,20 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       el.searchClear.hidden = !this.value;
       state.query = this.value;
       applyDebounced();
+      sug.places = [];
+      renderSuggest();
       fetchSuggest(this.value.trim());
     });
+    el.searchInput.addEventListener('focus', function () { renderSuggest(); });
     el.searchInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') hideSuggest();
+      if (e.key === 'Escape') { hideSuggest(); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); moveSuggest(1); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); moveSuggest(-1); return; }
+      if (e.key === 'Enter') {
+        var it = sug.idx > -1 ? sug.items[sug.idx] : null;
+        if (it) { e.preventDefault(); pickSuggest(it); }
+        else { pushHistory(this.value.trim()); hideSuggest(); }
+      }
     });
     el.searchClear.addEventListener('click', function () {
       el.searchInput.value = '';
@@ -3938,18 +4414,26 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     });
 
     el.searchSuggest.addEventListener('click', function (e) {
-      var btn = e.target.closest('button');
+      var clr = e.target.closest('[data-sg="clear-hist"]');
+      if (clr) { clearHistory(); hideSuggest(); return; }
+      var all = e.target.closest('[data-sg="all"]');
+      if (all) {
+        pushHistory(el.searchInput.value.trim());
+        hideSuggest();
+        applyFilters();
+        el.results.scrollTop = 0;
+        return;
+      }
+      var btn = e.target.closest('.sg-item');
       if (!btn) return;
-      var it = (el.searchSuggest._items || [])[+btn.dataset.i];
-      if (!it) return;
-      hideSuggest();
-      el.searchInput.value = it.main;
-      el.searchClear.hidden = false;
-      // A helyszínjavaslatra kattintva is maradjon aktív a keresőszó,
-      // különben a lista újra az összes pontot mutatja (pl. „Mezőhegyes”).
-      state.query = it.main;
-      applyFilters();
-      map.easeTo({ center: [it.lng, it.lat], zoom: 14, duration: 800 });
+      pickSuggest(sug.items[+btn.dataset.i]);
+    });
+
+    // hover-előnézet: a térkép odarepül, mielőtt kattintanál
+    el.searchSuggest.addEventListener('mouseover', function (e) {
+      var btn = e.target.closest('.sg-item');
+      if (!btn || !btn.dataset.point) return;
+      previewPointOnMap(+btn.dataset.point);
     });
 
     document.addEventListener('click', function (e) {
@@ -3976,8 +4460,161 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         });
         chip.classList.add('is-active');
         state.filter = chip.dataset.filter;
+        syncFilterCount();
         applyFilters();
       });
+    });
+
+    // távolság-szűrő
+    Array.prototype.forEach.call(document.querySelectorAll('.dist'), function (b) {
+      b.addEventListener('click', function () {
+        Array.prototype.forEach.call(document.querySelectorAll('.dist'), function (x) {
+          x.classList.remove('is-active');
+        });
+        b.classList.add('is-active');
+        state.maxD = +b.dataset.dist || 0;
+        syncFilterCount();
+        applyFilters();
+      });
+    });
+
+    if (el.filterToggle) {
+      el.filterToggle.addEventListener('click', function () {
+        setFilterPop(el.filterPop.hidden);
+      });
+    }
+    if (el.filterClose) el.filterClose.addEventListener('click', function () { setFilterPop(false); });
+    if (el.filterDone) el.filterDone.addEventListener('click', function () { setFilterPop(false); });
+    if (el.filterReset) {
+      el.filterReset.addEventListener('click', function () {
+        document.querySelectorAll('.chip').forEach(function (c) { c.classList.toggle('is-active', c.dataset.filter === 'all'); });
+        document.querySelectorAll('.dist').forEach(function (c) { c.classList.toggle('is-active', +c.dataset.dist === 0); });
+        document.querySelectorAll('.sort').forEach(function (c) { c.classList.toggle('is-active', c.dataset.sort === 'dist'); });
+        state.filter = 'all';
+        state.maxD = 0;
+        state.sort = 'dist';
+        syncFilterCount();
+        applyFilters();
+      });
+    }
+    // mentés popup (kedvencek + gyűjtemények)
+    if (el.savePop) {
+      el.savePop.addEventListener('click', function (e) {
+        var row = e.target.closest('[data-sl]');
+        if (row) {
+          toggleInList(row.dataset.sl, savePointId);
+          openSavePop(savePointId, savePopAnchor);
+          applyFilters();
+          return;
+        }
+        if (e.target.closest('#saveFavRow')) {
+          toggleFav(savePointId);
+          openSavePop(savePointId, savePopAnchor);
+          return;
+        }
+        if (e.target.closest('#saveClose')) closeSavePop();
+      });
+      if (el.saveNewForm) {
+        el.saveNewForm.addEventListener('submit', function (e) {
+          e.preventDefault();
+          if (createList(el.saveNewInput.value, savePointId)) {
+            openSavePop(savePointId, savePopAnchor);
+            applyFilters();
+          }
+        });
+      }
+    }
+
+    document.addEventListener('click', function (e) {
+      var sv = e.target.closest('[data-save]');
+      if (sv) {
+        e.preventDefault();
+        savePopAnchor = sv;
+        openSavePop(+sv.dataset.save, sv);
+        return;
+      }
+      if (el.savePop && !el.savePop.hidden && !e.target.closest('#savePop')) closeSavePop();
+      if (el.listsPop && !el.listsPop.hidden && !e.target.closest('#listsPop') && !e.target.closest('#listsBtn')) setListsPop(false);
+    });
+
+    if (el.listsBtn) {
+      el.listsBtn.addEventListener('click', function () {
+        setListsPop(el.listsPop.hidden);
+      });
+    }
+    if (el.listsClose) el.listsClose.addEventListener('click', function () { setListsPop(false); });
+
+    if (el.listsRow) {
+      el.listsRow.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-list]');
+        if (!b) return;
+        state.listId = state.listId === b.dataset.list ? null : b.dataset.list;
+        setListsPop(false);
+        syncFilterCount();
+        applyFilters();
+      });
+    }
+
+    if (el.activeFilters) {
+      el.activeFilters.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-rm]');
+        if (!b) return;
+        var rm = b.dataset.rm;
+        if (rm === 'filter') {
+          document.querySelectorAll('.chip').forEach(function (c) { c.classList.toggle('is-active', c.dataset.filter === 'all'); });
+          state.filter = 'all';
+        } else if (rm === 'dist') {
+          document.querySelectorAll('.dist').forEach(function (c) { c.classList.toggle('is-active', +c.dataset.dist === 0); });
+          state.maxD = 0;
+        } else if (rm === 'sort') {
+          document.querySelectorAll('.sort').forEach(function (c) { c.classList.toggle('is-active', c.dataset.sort === 'dist'); });
+          state.sort = 'dist';
+        } else if (rm === 'list') {
+          state.listId = null;
+        }
+        syncFilterCount();
+        applyFilters();
+      });
+    }
+
+    // kattintás a popupon kívülre: bezár
+    document.addEventListener('click', function (e) {
+      if (el.filterPop && !el.filterPop.hidden && !e.target.closest('#filterPop') && !e.target.closest('#filterToggle')) {
+        setFilterPop(false);
+      }
+    });
+
+    // Ctrl/⌘+K: a keresőmezőre ugrik
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setSearchOpen(true);
+        setTimeout(function () { el.searchInput.focus(); el.searchInput.select(); }, 40);
+      }
+      if (e.key === 'Escape') {
+        if (el.filterPop && !el.filterPop.hidden) setFilterPop(false);
+        if (el.savePop && !el.savePop.hidden) closeSavePop();
+        if (el.listsPop && !el.listsPop.hidden) setListsPop(false);
+      }
+    });
+
+    // üres állapot gombjai
+    el.results.addEventListener('click', function (e) {
+      if (e.target.closest('[data-clear-filters]')) {
+        document.querySelectorAll('.chip').forEach(function (c) { c.classList.toggle('is-active', c.dataset.filter === 'all'); });
+        document.querySelectorAll('.dist').forEach(function (c) { c.classList.toggle('is-active', +c.dataset.dist === 0); });
+        state.filter = 'all';
+        state.maxD = 0;
+        syncFilterCount();
+        applyFilters();
+        return;
+      }
+      if (e.target.closest('[data-clear-query]')) {
+        el.searchInput.value = '';
+        el.searchClear.hidden = true;
+        state.query = '';
+        applyFilters();
+      }
     });
 
     Array.prototype.forEach.call(document.querySelectorAll('.sort'), function (btn) {
@@ -3987,13 +4624,14 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         });
         btn.classList.add('is-active');
         state.sort = btn.dataset.sort;
+        syncFilterCount();
         applyFilters();
       });
     });
 
     el.locateBtn.addEventListener('click', function () { askLocation('locate'); });
 
-    el.resetBtn.addEventListener('click', function () {
+    if (el.resetBtn) el.resetBtn.addEventListener('click', function () {
       el.searchInput.value = '';
       el.searchClear.hidden = true;
       state.query = '';
@@ -4010,6 +4648,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     });
 
     el.results.addEventListener('click', function (e) {
+      if (e.target.closest('[data-save]')) return;
       var favEl = e.target.closest('[data-fav]');
       if (favEl) { e.stopPropagation(); toggleFav(+favEl.dataset.fav); return; }
       var card = e.target.closest('.card');
@@ -4295,6 +4934,11 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         if (selectedId != null) toggleFav(selectedId);
       });
     });
+    if (el.sheetSave) {
+      el.sheetSave.addEventListener('click', function () {
+        if (selectedId != null) openSavePop(selectedId, this);
+      });
+    }
     if (el.reportBtns) {
       el.reportBtns.addEventListener('click', function (e) {
         var b = e.target.closest('[data-report]');
@@ -5965,6 +6609,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   function boot() {
     ['searchInput', 'searchClear', 'searchSuggest', 'locateBtn', 'resetBtn', 'panel',
      'panelGrip', 'results', 'resultsLabel', 'resultsCount', 'qbar', 'qbarList', 'qbarGo',
+     'filterToggle', 'filterCount', 'distRow', 'filterPop', 'filterClose', 'filterDone', 'filterReset', 'activeFilters',
+     'listsRow', 'savePop', 'saveClose', 'saveLists', 'saveFavRow', 'saveNewForm', 'saveNewInput', 'sheetSave',
+     'listsBtn', 'listsPop', 'listsClose', 'listsEmpty', 'listsCount',
      'dock', 'dockTop', 'dockMap', 'dockProfile', 'dockSearch', 'dockFriends', 'dockFriendsDot',
      'sosBtn', 'sosView', 'sosClose', 'sosArrow', 'sosDist', 'sosBadge', 'sosName',
      'sosAddr', 'sosGo', 'sosNext', 'sosDetail', 'sosMoreList',
