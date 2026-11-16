@@ -8130,3 +8130,144 @@ mark.hit { background: transparent; color: var(--accent); font-weight: 700; }
   justify-content: center;
 }
 .search-actions .pill { padding: 0 12px; }
+
+/* ===================== v26: térkép – vissza rám gomb, GPS chip ===================== */
+
+.recenter {
+  position: absolute;
+  right: 16px;
+  bottom: 178px;
+  z-index: 858;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .16);
+  background: linear-gradient(180deg, rgba(40, 46, 54, .78), rgba(16, 21, 28, .86));
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  color: #DCEBF4;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: var(--e2), inset 0 1px 0 rgba(255, 255, 255, .16);
+  animation: recIn .22s cubic-bezier(.2, .8, .3, 1) both;
+  transition: transform .18s ease, box-shadow .2s ease, background .18s ease;
+}
+@keyframes recIn { from { opacity: 0; transform: scale(.9); } }
+.recenter:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, rgba(52, 60, 70, .82), rgba(20, 26, 34, .88));
+}
+.recenter:active { transform: scale(.96); }
+.recenter:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.recenter .rec-needle {
+  transition: transform .28s cubic-bezier(.2, .8, .3, 1);
+  color: var(--accent);
+  filter: drop-shadow(0 0 6px rgba(27, 109, 153, .55));
+}
+
+/* GPS pontosság */
+.gps-chip {
+  position: absolute;
+  left: 16px;
+  bottom: 178px;
+  z-index: 857;
+  height: 26px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(12, 17, 24, .72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.gps-chip.is-weak { color: #F0B37E; border-color: rgba(241, 101, 36, .35); }
+
+@media (max-width: 900px) {
+  .recenter { right: 14px; bottom: 166px; width: 44px; height: 44px; }
+  .gps-chip { left: 14px; bottom: 170px; }
+}
+
+/* ===================== v27: térkép-menü, vignetta ===================== */
+
+/* finom vignetta a térkép szélein – a saját réteg jobban kiemelkedik */
+.map-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 50% 45%, rgba(0, 0, 0, 0) 55%, rgba(4, 7, 10, .55) 100%);
+  mix-blend-mode: multiply;
+}
+
+/* jobb klikk / hosszú nyomás menü */
+.map-menu {
+  position: fixed;
+  z-index: 960;
+  min-width: 190px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(12, 17, 24, .96);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid var(--g-brd-2);
+  box-shadow: var(--e3);
+  animation: mmIn .16s cubic-bezier(.2, .8, .3, 1) both;
+}
+@keyframes mmIn { from { opacity: 0; transform: scale(.96) translateY(-4px); } }
+.mm-item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 10px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--ink);
+  font: inherit; font-size: 12.5px; font-weight: 600; text-align: left; cursor: pointer;
+}
+.mm-item svg { flex: none; color: var(--accent); }
+.mm-item:hover { background: rgba(255, 255, 255, .07); }
+
+/* ===================== v28: térkép anyag-érzés + hover tooltip ===================== */
+
+/* finom szemcse a térkép fölött – „prémium sötét” hatás */
+.map-vignette { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05); }
+.map-vignette::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: .14;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+/* hover tooltip a markerek felett */
+.map-tip {
+  position: fixed;
+  z-index: 955;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(10, 14, 20, .94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--g-brd-2);
+  box-shadow: var(--e2);
+  animation: tipIn .12s ease both;
+}
+@keyframes tipIn { from { opacity: 0; transform: translateY(3px); } }
+.map-tip b {
+  font-family: var(--display);
+  font-size: 12.5px; font-weight: 600; letter-spacing: -.2px;
+  color: var(--ink);
+  max-width: 200px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.map-tip span { font-size: 11px; color: var(--ink-3); }

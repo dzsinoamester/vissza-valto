@@ -1937,7 +1937,51 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (selectedId != null) setSelected(selectedId);
     if (state.route) drawRouteLayer(state.route.geojson);
     bindLayerHandlers();
-    if (!onStyleLoad._rot) { onStyleLoad._rot = true; map.on('rotate', paintMe); }
+    if (!onStyleLoad._rot) {
+      onStyleLoad._rot = true;
+      map.on('rotate', paintMe);
+      map.on('rotate', updateRecenter);
+      map.on('moveend', updateRecenter);
+    }
+    if (!onStyleLoad._tip) {
+      onStyleLoad._tip = true;
+      var tip = el.mapTip;
+      map.on('mousemove', function (e) {
+        if (!tip) return;
+        var ids = ['repont-dot', 'repont-score', 'repont-halo'].filter(function (l) { return map.getLayer(l); });
+        var fs = ids.length ? map.queryRenderedFeatures(e.point, { layers: ids }) : null;
+        var f = fs && fs[0];
+        var p = f ? state.byId.get(f.properties.id) : null;
+        if (!p) { tip.hidden = true; return; }
+        var st = statusOf(p, new Date());
+        tip.innerHTML = '<b>' + esc(p.name) + '</b><span>' +
+          (p._d != null ? fmtDist(p._d) + ' · ' : '') +
+          (st === 'open' ? 'Nyitva' : (st === 'soon' ? 'Hamarosan zár' : 'Zárva')) + '</span>';
+        tip.hidden = false;
+        var rect = map.getContainer().getBoundingClientRect();
+        tip.style.left = Math.max(10, Math.min(rect.left + e.point.x + 14, innerWidth - 230)) + 'px';
+        tip.style.top = Math.max(10, rect.top + e.point.y - 48) + 'px';
+      });
+      map.on('mouseout', function () { if (tip) tip.hidden = true; });
+      map.on('dragstart', function () { if (tip) tip.hidden = true; });
+    }
+
+    if (!onStyleLoad._menu) {
+      onStyleLoad._menu = true;
+      map.on('contextmenu', function (e) { openMapMenu(e.lngLat, e.point.x, e.point.y); });
+      var lpTimer = null;
+      map.on('touchstart', function (e) {
+        var t = e.originalEvent && e.originalEvent.touches && e.originalEvent.touches[0];
+        if (!t) return;
+        var rect = map.getContainer().getBoundingClientRect();
+        lpTimer = setTimeout(function () {
+          openMapMenu(map.unproject([t.clientX - rect.left, t.clientY - rect.top]), t.clientX, t.clientY);
+        }, 520);
+      });
+      map.on('touchmove', function () { clearTimeout(lpTimer); });
+      map.on('touchend', function () { clearTimeout(lpTimer); });
+      map.on('dragstart', closeMapMenu);
+    }
     ready.style = true;
     startAnimations();
     if (pendingPlace) { var fn = pendingPlace; pendingPlace = null; fn(); }
@@ -2091,6 +2135,23 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   }
 
   function addDataLayers() {
+    // távolság-szűrő köre
+    if (!map.getSource('radius')) {
+      map.addSource('radius', { type: 'geojson', data: radiusFeature() || EMPTY_FC });
+      map.addLayer({
+        id: 'radius-fill', type: 'fill', source: 'radius',
+        paint: { 'fill-color': 'rgba(27, 109, 153, .10)' }
+      });
+      map.addLayer({
+        id: 'radius-line', type: 'line', source: 'radius',
+        paint: {
+          'line-color': 'rgba(44, 134, 184, .6)',
+          'line-width': 1.5,
+          'line-dasharray': [2, 2]
+        }
+      });
+    }
+
     if (!map.getSource('repont')) {
       map.addSource('repont', {
         type: 'geojson',
@@ -2105,7 +2166,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         filter: ['!', ['has', 'point_count']],
         paint: {
           'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 9, 11, 15, 16, 22],
-          'circle-color': ['match', ['get', 'type'], 'automata', 'rgba(255,122,69,.5)', 'rgba(34,201,238,.5)'],
+          'circle-color': ['match', ['get', 'state'],
+            'open', 'rgba(43,217,124,.55)',
+            'soon', 'rgba(240,161,92,.5)',
+            'rgba(58,69,83,.4)'],
           'circle-blur': 0.82
         }
       });
@@ -2114,10 +2178,14 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         id: 'repont-dot', type: 'circle', source: 'repont',
         filter: ['all', ['!', ['has', 'point_count']], ['!', ['has', 'score']]],
         paint: {
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 3.2, 11, 5, 16, 6.5],
-          'circle-color': ['match', ['get', 'type'], 'automata', '#FF7A45', '#22C9EE'],
-          'circle-stroke-color': '#0B0E13',
-          'circle-stroke-width': 1.6
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 3.6, 11, 5.6, 16, 7.2],
+          // kitöltés = üzemállapot, él = pont típusa
+          'circle-color': ['match', ['get', 'state'],
+            'open', '#2BD97C',
+            'soon', '#F0A15C',
+            '#39434F'],
+          'circle-stroke-color': ['match', ['get', 'type'], 'automata', '#FF7A45', '#22C9EE'],
+          'circle-stroke-width': 1.8
         }
       });
 
@@ -2250,7 +2318,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       map.addLayer({
         id: 'route-case', type: 'line', source: 'route',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#0B0E13', 'line-width': 12, 'line-opacity': .85 }
+        paint: {
+          'line-color': '#05080C',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 8, 10, 15, 17],
+          'line-opacity': .55,
+          'line-blur': 4
+        }
       });
       map.addLayer({
         id: 'route-line', type: 'line', source: 'route',
@@ -2275,8 +2348,13 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   }
 
   function setSelected(id) {
-    if (!map.getLayer('repont-sel')) return;
+    if (!map || !map.getLayer || !map.getLayer('repont-sel')) return;
     map.setFilter('repont-sel', ['==', ['get', 'id'], id]);
+    // kiválasztott pontnál a többi marker visszahúzódik
+    var dim = id != null ? 0.42 : 1;
+    ['repont-halo', 'repont-dot', 'repont-score'].forEach(function (lid) {
+      if (map.getLayer(lid)) map.setPaintProperty(lid, 'circle-opacity', dim);
+    });
   }
 
   function bindLayerHandlers() {
@@ -2449,11 +2527,16 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   function setPoints(points) {
     var store = loadFbStore();
+    var nowP = new Date();
     state.geojson = {
       type: 'FeatureCollection',
       features: points.map(function (p) {
         var d = store[p.id];
-        var props = { id: p.id, type: p.type, rank: p._rank || 99 };
+        var st = statusOf(p, nowP);
+        var props = {
+          id: p.id, type: p.type, rank: p._rank || 99,
+          state: (st === 'open' ? 'open' : (st === 'soon' ? 'soon' : 'closed'))
+        };
         if (d && d.score != null) props.score = d.score;   // csak létező pontszám
         if (social.reports[p.id]) props.report = social.reports[p.id].status;
         return {
@@ -3030,6 +3113,25 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       }
     }
 
+    // letérés az útvonaltól → automatikus újratervezés
+    var onPt = nav.line[Math.min(pos.idx, nav.line.length - 1)];
+    var offM = onPt ? dist(me.lat, me.lng, onPt[1], onPt[0]) : 0;
+    if (offM > 70) {
+      if (!nav.offSince) nav.offSince = Date.now();
+      else if (Date.now() - nav.offSince > 6000 && !nav.rerouting) {
+        nav.rerouting = true;
+        toast('Letértél az útvonalról – újratervezés…');
+        var rp = state.route && state.route.point;
+        var rm = state.route && state.route.mode;
+        setTimeout(function () {
+          nav.rerouting = false;
+          if (rp) startRoute(rp, rm, { navigate: true });
+        }, 800);
+      }
+    } else {
+      nav.offSince = 0;
+    }
+
     el.navDist.textContent = fmtDist(toManeuver);
     el.navRemain.textContent = fmtDist(remainAlong);
     el.navTotal.textContent = fmtDist(nav.total);
@@ -3149,6 +3251,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       list = list.filter(function (p) { return ids.indexOf(p.id) > -1; });
     }
     renderLists();
+    updateRadiusCircle();
 
     // 4) találati erősség: név eleji > névben > bárhol a szövegben
     var t0 = terms[0];
@@ -3412,6 +3515,23 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   var savePointId = null;
   var savePopAnchor = null;
+
+  /* --- térkép-menü (jobb klikk / hosszú nyomás) --- */
+  var mapMenuLngLat = null;
+
+  function openMapMenu(lngLat, x, y) {
+    if (!el.mapMenu) return;
+    mapMenuLngLat = lngLat;
+    el.mapMenu.hidden = false;
+    var w = el.mapMenu.offsetWidth || 190;
+    var h = el.mapMenu.offsetHeight || 100;
+    el.mapMenu.style.left = Math.min(Math.max(12, x), innerWidth - w - 12) + 'px';
+    el.mapMenu.style.top = Math.min(Math.max(12, y), innerHeight - h - 12) + 'px';
+  }
+
+  function closeMapMenu() {
+    if (el.mapMenu) el.mapMenu.hidden = true;
+  }
 
   function placePopAt(pop, anchor) {
     var r = anchor.getBoundingClientRect();
@@ -3955,10 +4075,57 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       .setLngLat([state.me.lng, state.me.lat])
       .addTo(map);
     paintMe();
+    paintGps();
+    updateRecenter();
+    updateRadiusCircle();
+  }
+
+  // GPS pontosság kijelzése + a „vissza rám” gomb állapota
+  function paintGps() {
+    if (!el.gpsChip) return;
+    var a = state.me && state.me.accuracy;
+    if (a == null || !isFinite(a)) { el.gpsChip.hidden = true; return; }
+    el.gpsChip.hidden = false;
+    el.gpsChip.textContent = 'GPS ±' + Math.round(a) + ' m';
+    el.gpsChip.classList.toggle('is-weak', a > 50);
+  }
+
+  // „vissza rám” gomb: csak akkor látszik, ha elhúztad vagy elforgattad a térképet
+  function updateRecenter() {
+    if (!el.recenterBtn) return;
+    if (!state.me || !map) { el.recenterBtn.hidden = true; return; }
+    var c = map.getCenter();
+    var away = dist(c.lat, c.lng, state.me.lat, state.me.lng) > 260;
+    var rot = Math.abs(map.getBearing()) > 2;
+    el.recenterBtn.hidden = !(away || rot);
+    var needle = el.recenterBtn.querySelector('.rec-needle');
+    if (needle) needle.style.transform = 'rotate(' + (-map.getBearing()) + 'deg)';
+  }
+
+  // a távolság-szűrő köre a térképen
+  function radiusFeature() {
+    if (!state.me || !state.maxD) return null;
+    var R = 6378137, lat = state.me.lat * Math.PI / 180, lng = state.me.lng * Math.PI / 180;
+    var d = state.maxD * 1000 / R, coords = [];
+    for (var i = 0; i <= 64; i++) {
+      var b = i / 64 * Math.PI * 2;
+      var la = Math.asin(Math.sin(lat) * Math.cos(d) + Math.cos(lat) * Math.sin(d) * Math.cos(b));
+      var lo = lng + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat), Math.cos(d) - Math.sin(lat) * Math.sin(la));
+      coords.push([lo * 180 / Math.PI, la * 180 / Math.PI]);
+    }
+    return {
+      type: 'FeatureCollection',
+      features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [coords] } }]
+    };
+  }
+
+  function updateRadiusCircle() {
+    if (!map || !map.getSource || !map.getSource('radius')) return;
+    map.getSource('radius').setData(radiusFeature() || EMPTY_FC);
   }
 
   function setMe(lat, lng, why) {
-    state.me = { lat: lat, lng: lng, heading: null, brake: false };
+    state.me = { lat: lat, lng: lng, heading: null, brake: false, accuracy: state.me ? state.me.accuracy : null };
     state.points.forEach(function (p) { p._d = dist(lat, lng, p.lat, p.lng); });
 
     if (why !== 'sos' && why !== 'route') { applyFilters(); }
@@ -4003,6 +4170,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       }
       state.me.heading = heading;
       state.me.brake = (speed != null) ? speed < 0.6 : false;
+      state.me.accuracy = (c.accuracy != null && isFinite(c.accuracy)) ? c.accuracy : state.me.accuracy;
+      paintGps();
+      updateRecenter();
 
       if (meMarker) meMarker.setLngLat([state.me.lng, state.me.lat]);
       paintMe();
@@ -4595,6 +4765,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         if (el.filterPop && !el.filterPop.hidden) setFilterPop(false);
         if (el.savePop && !el.savePop.hidden) closeSavePop();
         if (el.listsPop && !el.listsPop.hidden) setListsPop(false);
+        if (el.mapMenu && !el.mapMenu.hidden) closeMapMenu();
       }
     });
 
@@ -4937,6 +5108,45 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (el.sheetSave) {
       el.sheetSave.addEventListener('click', function () {
         if (selectedId != null) openSavePop(selectedId, this);
+      });
+    }
+
+    // térkép-menü: jobb klikk PC-n, hosszú nyomás mobilon
+    if (el.mapMenu) {
+      el.mapMenu.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-mm]');
+        if (!b) return;
+        var ll = mapMenuLngLat;
+        closeMapMenu();
+        if (!ll || !map) return;
+        if (b.dataset.mm === 'view') {
+          map.easeTo({ center: [ll.lng, ll.lat], zoom: Math.max(map.getZoom(), 15), duration: 600 });
+          return;
+        }
+        var best = null, bd = Infinity;
+        state.points.forEach(function (p) {
+          var d = dist(ll.lat, ll.lng, p.lat, p.lng);
+          if (d < bd) { bd = d; best = p; }
+        });
+        if (best && bd < 800) select(best.id, {});
+        else toast('Itt nincs közeli pont');
+      });
+    }
+    document.addEventListener('click', function (e) {
+      if (el.mapMenu && !el.mapMenu.hidden && !e.target.closest('#mapMenu')) closeMapMenu();
+    });
+
+    // vissza a saját pozícióra (és északra állítja az irányt)
+    if (el.recenterBtn) {
+      el.recenterBtn.addEventListener('click', function () {
+        if (!state.me || !map) return;
+        map.easeTo({
+          center: [state.me.lng, state.me.lat],
+          zoom: Math.max(map.getZoom(), 15),
+          bearing: 0,
+          pitch: 0,
+          duration: 700
+        });
       });
     }
     if (el.reportBtns) {
@@ -6611,7 +6821,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'panelGrip', 'results', 'resultsLabel', 'resultsCount', 'qbar', 'qbarList', 'qbarGo',
      'filterToggle', 'filterCount', 'distRow', 'filterPop', 'filterClose', 'filterDone', 'filterReset', 'activeFilters',
      'listsRow', 'savePop', 'saveClose', 'saveLists', 'saveFavRow', 'saveNewForm', 'saveNewInput', 'sheetSave',
-     'listsBtn', 'listsPop', 'listsClose', 'listsEmpty', 'listsCount',
+     'listsBtn', 'listsPop', 'listsClose', 'listsEmpty', 'listsCount', 'recenterBtn', 'gpsChip', 'mapMenu', 'mapTip',
      'dock', 'dockTop', 'dockMap', 'dockProfile', 'dockSearch', 'dockFriends', 'dockFriendsDot',
      'sosBtn', 'sosView', 'sosClose', 'sosArrow', 'sosDist', 'sosBadge', 'sosName',
      'sosAddr', 'sosGo', 'sosNext', 'sosDetail', 'sosMoreList',
