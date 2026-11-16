@@ -249,6 +249,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   }
 
   function toast(msg) {
+    if (settings && settings.toasts === false) return;
     el.toast.textContent = msg;
     el.toast.hidden = false;
     clearTimeout(toast._t);
@@ -1538,6 +1539,24 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     '</section>';
   }
 
+  // profil: lenyitható szekciók állapota
+  var profOpen = {};
+
+  function moreBtn(key, total, n) {
+    if (total <= n) return '';
+    return '<button class="p-more" type="button" data-more="' + key + '">' +
+      (profOpen[key] ? 'Kevesebb' : 'Összes (' + total + ')') + '</button>';
+  }
+
+  function cashMiniHtml() {
+    var t = cashTotals(cashList());
+    return '<div class="cash-mini">' +
+      '<div><b>' + t.bottles.toLocaleString('hu-HU') + '</b><span>palack</span></div>' +
+      '<div><b>' + esc(fmtFt(t.ft)) + '</b><span>kassza</span></div>' +
+      '<div><b>' + t.monthBottles.toLocaleString('hu-HU') + '</b><span>e hónapban</span></div>' +
+    '</div>';
+  }
+
   function badgeHtml(b) {
     return '<div class="p-badge' + (b.got ? ' is-got' : '') + '">' +
       '<span class="p-badge-ico" aria-hidden="true">' + b.ico + '</span>' +
@@ -1609,35 +1628,40 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     out.push('<div class="profile-stats">' +
       '<div class="profile-stat"><b>' + ids.length + '</b><span>értékelt pont</span></div>' +
       '<div class="profile-stat"><b>' + avg + '</b><span>átlag / 10</span></div>' +
-      '<div class="profile-stat"><b>' + (best ? best.score : '–') + '</b><span>legjobb</span></div>' +
       '<div class="profile-stat is-streak"><b>' + streakDays(activityKeys()) + '</b><span>napos sorozat</span></div>' +
     '</div>');
 
     var bestP = best ? state.byId.get(+best.id) : null;
     if (bestP) {
-      out.push('<div class="rank-row" data-id="' + bestP.id + '">' +
+      out.push('<button class="p-best" type="button" data-id="' + bestP.id + '">' +
         scoreBadge(best.score) +
-        '<span class="rank-main"><b>Kedvenc REpontod: ' + esc(bestP.name) + '</b>' +
-        '<small>' + esc(addrText(bestP)) + '</small></span>' +
-      '</div>');
+        '<span class="p-best-main"><small>Legjobb pontod</small><b>' + esc(bestP.name) + '</b></span>' +
+        '<span class="p-go" aria-hidden="true">›</span></button>');
     }
 
-    var topTags = Object.keys(tags).sort(function (a, b) { return tags[b] - tags[a]; }).slice(0, 4);
+    var topTags = Object.keys(tags).sort(function (a, b) { return tags[b] - tags[a]; }).slice(0, 3);
     if (topTags.length) {
-      out.push('<div class="fb-tags" style="margin-top:14px">' + topTags.map(function (t) {
+      out.push('<div class="fb-tags p-tags">' + topTags.map(function (t) {
         return '<span class="fb-tag is-on">' + esc(tagLabel(t)) + ' ×' + tags[t] + '</span>';
       }).join('') + '</div>');
     }
 
-    // jelvények
-    out.push(profSection('Jelvények', badges.map(badgeHtml).join('')));
+    // jelvények – csak a négy legfontosabb látszik
+    var badgeList = badges.map(badgeHtml);
+    out.push(profSection('Jelvények',
+      (profOpen.badges ? badgeList : badgeList.slice(0, 4)).join('') +
+      moreBtn('badges', badgeList.length, 4),
+      badges.filter(function (b) { return b.got; }).length + ' / ' + badges.length));
 
-    // visszaváltás-napló + kassza (50 Ft/db + kaució, havi grafikon)
-    out.push(profSection('Visszaváltás-napló', cashSectionHtml()));
+    // visszaváltás – összegző kártya, a napló lenyitható
+    out.push(profSection('Visszaváltás',
+      (profOpen.cash ? cashSectionHtml() : cashMiniHtml()) +
+      '<button class="p-more" type="button" data-more="cash">' +
+        (profOpen.cash ? 'Bezárás' : 'Részletek és napló') + '</button>'));
 
     // látogatások
     if (visits.length) {
-      out.push(profSection('Látogatások', visits.map(function (v) {
+      out.push(profSection('Látogatások', (profOpen.visits ? visits : visits.slice(0, 3)).map(function (v) {
         var p = state.byId.get(v.id);
         if (!p) return '';
         return '<div class="rank-row" data-id="' + p.id + '">' +
@@ -1646,12 +1670,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           '<small>' + fmtWhen(v.at) + (p.city ? ' · ' + esc(p.city) : '') + '</small></span>' +
           '<span class="p-go" aria-hidden="true">›</span>' +
         '</div>';
-      }).join(''), 'legutóbbi ' + visits.length));
+      }).join('') + moreBtn('visits', visits.length, 3), 'legutóbbi ' + visits.length));
     }
 
     // kedvencek
     if (favIds.length) {
-      out.push(profSection('Kedvenceid', favIds.map(function (id) {
+      out.push(profSection('Kedvenceid', (profOpen.favs ? favIds : favIds.slice(0, 3)).map(function (id) {
         var p = state.byId.get(id);
         return '<div class="rank-row" data-id="' + id + '">' +
           '<span class="p-ico" aria-hidden="true">★</span>' +
@@ -1659,16 +1683,16 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           '<small>' + esc(p.city || addrText(p)) + '</small></span>' +
           '<button class="p-btn" type="button" data-route="' + id + '">Útvonal</button>' +
         '</div>';
-      }).join(''), favIds.length + ' db'));
+      }).join('') + moreBtn('favs', favIds.length, 3), favIds.length + ' db'));
     }
 
     // értékelések
     if (ids.length) {
       var rows = ids.map(function (id) { return { id: id, d: store[id] || {} }; })
         .sort(function (a, b) { return (b.d.at || 0) - (a.d.at || 0); });
-      out.push(profSection('Értékeléseid', rows.map(function (r) {
+      out.push(profSection('Értékeléseid', (profOpen.ratings ? rows : rows.slice(0, 3)).map(function (r) {
         return rateRowHtml(r.id, r.d);
-      }).join(''), rows.length + ' db'));
+      }).join('') + moreBtn('ratings', rows.length, 3), rows.length + ' db'));
     }
 
     return out.join('');
@@ -2724,6 +2748,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   }
 
   function startRoute(p, mode, opts) {
+    if (!mode && settings && settings.mode) mode = settings.mode;
     mode = mode || (state.route && state.route.point === p ? state.route.mode : vehicleMode());
 
     if (!state.me) {
@@ -3786,6 +3811,100 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   /* ==================== ranglista / profil ==================== */
 
+  /* --- beállítások --- */
+  var SETTINGS_KEY = 'vissza.settings.v1';
+  var settings = { theme: 'default', toasts: true, mode: '' };
+
+  function loadSettings() {
+    try {
+      var s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+      if (s && typeof s === 'object') {
+        if (s.theme) settings.theme = s.theme;
+        if (typeof s.toasts === 'boolean') settings.toasts = s.toasts;
+        if (typeof s.mode === 'string') settings.mode = s.mode;
+      }
+    } catch (e) { }
+    applySettings();
+  }
+
+  function saveSettings() {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { }
+    applySettings();
+  }
+
+  function applySettings() {
+    document.documentElement.dataset.theme = settings.theme === 'deep' ? 'deep' : 'default';
+  }
+
+  function settingsHtml() {
+    var themes = [['default', 'Alap sötét'], ['deep', 'Mély sötét']];
+    var modes = [['', 'Automatikus'], ['driving', 'Autó'], ['cycling', 'Kerékpár'], ['foot', 'Gyalog']];
+    return '<div class="set-list">' +
+      '<div class="set-sec">Megjelenés</div>' +
+      '<div class="set-row"><span class="set-main"><b>Téma</b><small>Mély sötét: feketébb háttér, erősebb kontraszt</small></span>' +
+        '<span class="set-opts">' + themes.map(function (t) {
+          return '<button class="set-opt' + (settings.theme === t[0] ? ' is-on' : '') + '" type="button" data-set="theme" data-v="' + t[0] + '">' + t[1] + '</button>';
+        }).join('') + '</span></div>' +
+
+      '<div class="set-sec">Viselkedés</div>' +
+      '<div class="set-row"><span class="set-main"><b>Értesítések</b><small>Rövid visszajelzés minden művelet után</small></span>' +
+        '<button class="set-toggle' + (settings.toasts ? ' is-on' : '') + '" type="button" data-set="toasts" role="switch" aria-checked="' + (settings.toasts ? 'true' : 'false') + '"><i></i></button></div>' +
+      '<div class="set-row"><span class="set-main"><b>Alap közlekedési mód</b><small>Ezzel indul az útvonal, ha nem választasz</small></span>' +
+        '<span class="set-opts">' + modes.map(function (m) {
+          return '<button class="set-opt' + (settings.mode === m[0] ? ' is-on' : '') + '" type="button" data-set="mode" data-v="' + m[0] + '">' + m[1] + '</button>';
+        }).join('') + '</span></div>' +
+
+      '<div class="set-sec">Adatok</div>' +
+      '<div class="set-row"><span class="set-main"><b>Helyi adatok törlése</b><small>Kedvencek, listák, értékelések és előzmények ezen az eszközön</small></span>' +
+        '<button class="btn btn-ghost btn-sm" type="button" data-set="clear">Törlés</button></div>' +
+      '<div class="set-note">A fiókodhoz kötött adatok (barátok, üzenetek) törléséhez jelentkezz be, és használd a fiók menüt.</div>' +
+    '</div>';
+  }
+
+  /* --- értesítések --- */
+  var NOTIF_KEY = 'vissza.notif.seen.v1';
+
+  function notifSeenAt() {
+    try { return +(localStorage.getItem(NOTIF_KEY) || 0); } catch (e) { return 0; }
+  }
+
+  function notifItems() {
+    var out = [];
+    (soc.pokes || []).forEach(function (p) {
+      out.push({ key: 'poke' + p.id, at: p.at || 0, text: nameOf(p.from_id) + ' megbökött' });
+    });
+    (soc.requests || []).forEach(function (q) {
+      if (q.dir !== 'in') return;
+      out.push({ key: 'freq' + q.id, at: q.at || 0, text: nameOf(q.id) + ' barátkérelmet küldött' });
+    });
+    (soc.convs || []).forEach(function (c) {
+      if (!c.unread) return;
+      out.push({
+        key: 'msg' + c.id + c.unread,
+        at: (c.last && (c.last.at || c.last.created_at)) || 0,
+        text: convTitle(c) + ' – ' + c.unread + ' olvasatlan üzenet'
+      });
+    });
+    out.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+    return out;
+  }
+
+  function notifHtml() {
+    var items = notifItems();
+    var seen = notifSeenAt();
+    if (!items.length) {
+      return '<div class="overlay-empty">Nincs új értesítés.<br>Bökés, barátkérés és olvasatlan üzenet jelenik meg itt.</div>';
+    }
+    return '<div class="notif-list">' + items.map(function (it) {
+      var fresh = (it.at || 0) > seen;
+      return '<button class="notif-row' + (fresh ? ' is-new' : '') + '" type="button" data-notif="' + esc(it.key) + '">' +
+        '<span class="notif-dot" aria-hidden="true"></span>' +
+        '<span class="notif-main">' + esc(it.text) + '</span>' +
+        '<span class="notif-ago">' + (it.at ? agoText(it.at) : '') + '</span></button>';
+    }).join('') + '</div>' +
+      '<div class="notif-foot"><button class="btn btn-ghost btn-sm" type="button" data-set="notif-seen">Mind olvasottnak</button></div>';
+  }
+
   function openOverlay(kind) {
     overlayKind = kind;
     var store = loadFbStore();
@@ -3820,6 +3939,16 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       el.overlayEyebrow.textContent = 'Közösség';
       el.overlayTitle.textContent = 'Barátok';
       renderFriendsView();
+    } else if (kind === 'notif') {
+      el.overlayEyebrow.textContent = 'Értesítések';
+      var ni = notifItems();
+      el.overlayTitle.textContent = ni.length ? ni.length + ' értesítés' : 'Nincs új értesítés';
+      el.overlayBody.innerHTML = notifHtml();
+      try { localStorage.setItem(NOTIF_KEY, String(Date.now())); } catch (e) { }
+    } else if (kind === 'settings') {
+      el.overlayEyebrow.textContent = 'Beállítások';
+      el.overlayTitle.textContent = 'Beállítások';
+      el.overlayBody.innerHTML = settingsHtml();
     } else {
       el.overlayEyebrow.textContent = 'Profil';
       el.overlayTitle.textContent = 'Profilom';
@@ -3836,9 +3965,37 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       while (actWrap.firstChild) el.overlayBody.appendChild(actWrap.firstChild);
     }
 
+    // fejléc-jobbra: értesítések + beállítások ikonok (csak a profilon)
+    if (el.overlayActions) {
+      if (kind === 'profile') {
+        var nNewAct = notifItems().filter(function (it) { return (it.at || 0) > notifSeenAt(); }).length;
+        el.overlayActions.innerHTML =
+          '<button class="oh-btn" type="button" data-ov="notif" aria-label="Értesítések" title="Értesítések">' +
+            icon('bell', 17) + (nNewAct ? '<i class="oh-dot">' + (nNewAct > 9 ? '9+' : nNewAct) + '</i>' : '') +
+          '</button>' +
+          '<button class="oh-btn" type="button" data-ov="settings" aria-label="Beállítások" title="Beállítások">' +
+            icon('gear', 17) + '</button>';
+      } else if (kind === 'notif' || kind === 'settings') {
+        el.overlayActions.innerHTML =
+          '<button class="oh-btn" type="button" data-ov="profile" aria-label="Vissza a profilhoz" title="Vissza a profilhoz">' +
+            icon('back', 17) + '</button>';
+      } else {
+        el.overlayActions.innerHTML = '';
+      }
+    }
+
     document.body.classList.toggle('is-friends', kind === 'friends');
     el.overlay.hidden = false;
     document.body.classList.add('is-page');
+
+    // oldalváltás animáció
+    var card = document.querySelector('.overlay-card');
+    if (card) {
+      card.classList.remove('is-enter');
+      void card.offsetWidth;
+      card.classList.add('is-enter');
+      card.scrollTop = 0;
+    }
   }
 
   function closeOverlay() {
@@ -4802,6 +4959,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     el.locateBtn.addEventListener('click', function () { askLocation('locate'); });
 
+    loadSettings();
+
     if (el.resetBtn) el.resetBtn.addEventListener('click', function () {
       el.searchInput.value = '';
       el.searchClear.hidden = true;
@@ -5134,6 +5293,53 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     }
     document.addEventListener('click', function (e) {
       if (el.mapMenu && !el.mapMenu.hidden && !e.target.closest('#mapMenu')) closeMapMenu();
+    });
+
+    // értesítések / beállítások belépők és vezérlők
+    document.addEventListener('click', function (e) {
+      var ov = e.target.closest('[data-ov]');
+      if (ov) { openOverlay(ov.dataset.ov); return; }
+      var mb = e.target.closest('[data-more]');
+      if (mb) {
+        profOpen[mb.dataset.more] = !profOpen[mb.dataset.more];
+        openOverlay('profile');
+        return;
+      }
+      var st = e.target.closest('[data-set]');
+      if (!st) return;
+      var k = st.dataset.set;
+      if (k === 'theme' || k === 'mode') {
+        settings[k === 'theme' ? 'theme' : 'mode'] = st.dataset.v;
+        saveSettings();
+        openOverlay('settings');
+        return;
+      }
+      if (k === 'toasts') {
+        settings.toasts = !settings.toasts;
+        saveSettings();
+        openOverlay('settings');
+        toast(settings.toasts ? 'Értesítések bekapcsolva' : 'Értesítések kikapcsolva');
+        return;
+      }
+      if (k === 'notif-seen') {
+        try { localStorage.setItem(NOTIF_KEY, String(Date.now())); } catch (e2) { }
+        openOverlay('notif');
+        return;
+      }
+      if (k === 'clear') {
+        try {
+          Object.keys(localStorage).forEach(function (key) {
+            if (key.indexOf('vissza.') === 0 && key !== SETTINGS_KEY) localStorage.removeItem(key);
+          });
+        } catch (e2) { }
+        social.favs = {};
+        state.lists = [];
+        state.listId = null;
+        renderLists();
+        applyFilters();
+        openOverlay('settings');
+        toast('Helyi adatok törölve');
+      }
     });
 
     // vissza a saját pozícióra (és északra állítja az irányt)
@@ -5868,7 +6074,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     chat: '<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-2.9-.5L4 21l1.6-4.6A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z"/>',
     users: '<path d="M15.5 20v-1.7a3.3 3.3 0 0 0-3.3-3.3H6.3A3.3 3.3 0 0 0 3 18.3V20"/><circle cx="9.2" cy="8" r="3.3"/><path d="M17 11.3a3.3 3.3 0 0 0 0-6.5M21 20v-1.7a3.3 3.3 0 0 0-2.5-3.2"/>',
     bottle: '<path d="M10 3h4v2.4c0 .9.4 1.7 1.1 2.3.9.8 1.4 1.9 1.4 3.1v9.7a2 2 0 0 1-2 2H9.5a2 2 0 0 1-2-2v-9.7c0-1.2.5-2.3 1.4-3.1A3 3 0 0 0 10 5.4z"/><path d="M8 13.6h8"/>',
-    x: '<path d="m6 6 12 12M18 6 6 18"/>'
+    x: '<path d="m6 6 12 12M18 6 6 18"/>',
+    bell: '<path d="M18 8.5a6 6 0 0 0-12 0c0 6-2.5 7.5-2.5 7.5h17S18 14.5 18 8.5"/><path d="M13.7 20a2 2 0 0 1-3.4 0"/>',
+    back: '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>',
+    gear: '<circle cx="12" cy="12" r="3.1"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
   };
 
   function icon(name, size) {
@@ -6829,7 +7038,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'navExit', 'navPreview', 'navNext',
      'navStepsBtn', 'navStepsPanel', 'navStepsList', 'navStepsResume',
      'arrive', 'arriveName', 'arriveOk',
-     'overlay', 'overlayClose', 'overlayEyebrow', 'overlayTitle', 'overlayBody',
+     'overlay', 'overlayClose', 'overlayEyebrow', 'overlayTitle', 'overlayBody', 'overlayActions',
      'authView', 'authClose', 'authEyebrow', 'authTitle', 'authSub', 'authTabs',
      'authTabLogin', 'authTabRegister', 'authForm', 'authEmailField', 'authEmail',
      'authNameField', 'authName', 'authPasswordField', 'authPassword',

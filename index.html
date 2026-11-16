@@ -411,8 +411,13 @@
   <div class="overlay" id="overlay" hidden>
     <div class="overlay-card">
       <button class="overlay-close" id="overlayClose" type="button" aria-label="Bezárás">✕</button>
-      <span class="overlay-eyebrow" id="overlayEyebrow">Profil</span>
-      <h3 id="overlayTitle">–</h3>
+      <div class="overlay-head">
+        <span class="overlay-eyebrow" id="overlayEyebrow">Profil</span>
+        <div class="oh-row">
+          <h3 id="overlayTitle">–</h3>
+          <div class="oh-actions" id="overlayActions"></div>
+        </div>
+      </div>
       <div id="overlayBody"></div>
     </div>
   </div>
