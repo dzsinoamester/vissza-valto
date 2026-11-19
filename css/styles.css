@@ -10210,3 +10210,109 @@ body.is-offline .offline-chip { display: inline-flex; }
 @media (min-width: 901px) {
   .intro-art .mock { width: min(380px, 92%); }
 }
+
+/* ===================== v41: adathiba, moderáció, offline térkép ===================== */
+
+.issue-chip {
+  display: inline-flex; align-items: center;
+  padding: 3px 8px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .2px;
+  white-space: nowrap;
+  color: #FFD08A;
+  background: rgba(255, 187, 92, .12);
+  border: 1px solid rgba(255, 187, 92, .28);
+}
+
+.issues {
+  margin: 10px 0 2px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: rgba(255, 255, 255, .028);
+}
+.issues-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.issues-status { font-size: 11.5px; color: var(--ink-3); }
+.issues-status.is-on { color: #FFD08A; font-weight: 600; }
+.issues-sub { margin: 6px 0 10px; font-size: 12px; line-height: 1.45; color: var(--ink-2); }
+.issues-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.issue-btn {
+  height: 30px; padding: 0 11px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .04);
+  color: var(--ink-2);
+  font-size: 12px; font-weight: 600;
+}
+.issue-btn:hover { border-color: rgba(255, 187, 92, .4); color: var(--ink); }
+.issue-btn.is-on {
+  background: rgba(255, 187, 92, .14);
+  border-color: rgba(255, 187, 92, .45);
+  color: #FFD08A;
+}
+
+.issue-note {
+  width: 100%; height: 34px; margin-top: 8px; padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, .22);
+  font-size: 12.5px;
+}
+.issue-note::placeholder { color: var(--ink-3); }
+
+.admin-issues { display: flex; flex-direction: column; gap: 6px; }
+.admin-issue {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, .03);
+}
+.admin-issue .rank-main { flex: 1; min-width: 0; }
+.admin-issue b { display: block; font-size: 12.5px; }
+.admin-issue small {
+  display: block; font-size: 11px; color: var(--ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.set-count {
+  display: inline-block; margin-left: 6px; padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 187, 92, .16);
+  color: #FFD08A;
+  font-size: 10.5px; letter-spacing: 0;
+}
+
+.msg-more {
+  align-self: flex-start;
+  margin: -14px 0 0 2px;
+  padding: 2px 5px;
+  border: 0; border-radius: 6px;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 14px; line-height: 1;
+  opacity: .55;
+}
+.msg-more:hover, .msg-more:focus-visible {
+  opacity: 1; color: var(--ink);
+  background: rgba(255, 255, 255, .07);
+}
+
+.mod-menu {
+  position: fixed; z-index: 200;
+  display: flex; flex-direction: column;
+  min-width: 152px; padding: 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--glass-solid);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-sm);
+}
+.mod-menu button {
+  padding: 8px 10px;
+  border: 0; border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12.5px; text-align: left;
+}
+.mod-menu button:hover { background: rgba(255, 255, 255, .07); }
+.mod-menu button.is-danger { color: #FF8A8A; }

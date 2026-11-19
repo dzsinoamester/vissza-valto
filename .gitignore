@@ -1,0 +1,12 @@
+# titkok (VAPID privát kulcs, helyi env)
+.secrets/
+.env
+.env.*
+
+# eszközök
+.DS_Store
+Thumbs.db
+*.log
+
+# helyi másolatok
+.cloud-attachments/

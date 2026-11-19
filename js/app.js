@@ -1300,6 +1300,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   var social = {
     reports: {},      // id -> { status, at, count }
+    issues: {},       // id -> { count, at, mine: { closed: true, … } }  (adathiba-jelzések)
     remote: {},       // id -> { avg, votes }  (közösségi átlag)
     favs: {},         // id -> true
     visits: [],       // [{ id, at }] legutóbbi elöl
@@ -1381,6 +1382,120 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (!meta) return '';
     return '<span class="report-chip ' + meta.cls + '">' + agoText(r.at) + ' ' + meta.past +
       (r.count > 1 ? ' · ' + r.count + ' jelzés' : '') + '</span>';
+  }
+
+  /* --- adathiba-jelzések (strukturális: megszűnt, rossz hely, nyitvatartás) --- */
+
+  var ISSUE_KINDS = {
+    closed: 'Megszűnt',
+    moved: 'Rossz helyen van',
+    hours: 'Rossz nyitvatartás',
+    other: 'Egyéb adathiba'
+  };
+
+  function issueOf(id) { return social.issues[id] || null; }
+
+  function issueChipHtml(id) {
+    var i = issueOf(id);
+    if (!i || !i.count) return '';
+    return '<span class="issue-chip" title="Adathiba-jelzés – kattints a részletekhez">⚑ ' + i.count + '</span>';
+  }
+
+  function refreshSheetIssues() {
+    if (!el.issueStatus) return;
+    var i = selectedId != null ? issueOf(selectedId) : null;
+    el.issueStatus.textContent = i
+      ? (i.count + ' nyitott jelzés · ' + agoText(i.at))
+      : 'Nincs adathiba-jelzés';
+    el.issueStatus.classList.toggle('is-on', !!i);
+    if (el.issueBtns) {
+      Array.prototype.forEach.call(el.issueBtns.children, function (b) {
+        var k = b.dataset.issue;
+        b.classList.toggle('is-on', !!(i && i.mine && i.mine[k]));
+      });
+    }
+  }
+
+  function sendIssue(kind) {
+    if (!ISSUE_KINDS[kind] || selectedId == null) return;
+    if (!sb) { toast('A jelzéshez internetkapcsolat kell'); return; }
+    if (!account.user) {
+      authOpen('login');
+      authMessage('Az adathiba jelzéséhez jelentkezz be — így nem lesz belőle spam.', 'info');
+      return;
+    }
+    var id = selectedId;
+    var noteEl = document.getElementById('issueNote');
+    var note = noteEl ? String(noteEl.value || '').trim().slice(0, 280) : '';
+
+    sb.from('point_issues').upsert(
+      { point_id: id, user_id: account.user.id, kind: kind, note: note },
+      { onConflict: 'point_id,user_id,kind', ignoreDuplicates: true }
+    )
+      .then(function (r) {
+        if (r.error) throw r.error;
+        if (noteEl) noteEl.value = '';
+        toast('Köszönjük! Megnézzük a pontot.');
+        return refreshSocial();
+      })
+      .then(function () {
+        if (state.isAdmin) return loadAdminIssues();
+      })
+      .catch(function (e) { toast('A jelzés nem sikerült: ' + authErr(e)); });
+  }
+
+  /* --- admin: nyitott adathibák --- */
+
+  function loadAdminIssues() {
+    if (!sb || !account.user || !state.isAdmin) return Promise.resolve();
+    return sb.from('point_issues')
+      .select('id,point_id,kind,note,created_at')
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .limit(100)
+      .then(function (r) {
+        if (r.error) return;
+        state.adminIssues = r.data || [];
+        if (overlayKind === 'settings') openOverlay('settings');
+      })
+      .catch(function () { });
+  }
+
+  function resolveIssue(rowId, pointId) {
+    if (!sb || !account.user) return;
+    sb.from('point_issues').update({ status: 'resolved' })
+      .eq('id', +rowId)
+      .then(function (r) {
+        if (r.error) throw r.error;
+        state.adminIssues = (state.adminIssues || []).filter(function (x) { return String(x.id) !== String(rowId); });
+        if (social.issues[pointId]) {
+          social.issues[pointId].count = Math.max(0, social.issues[pointId].count - 1);
+          if (!social.issues[pointId].count) delete social.issues[pointId];
+        }
+        applyFilters();
+        toast('Jelzés lezárva');
+        openOverlay('settings');
+      })
+      .catch(function (e) { toast('Nem sikerült lezárni: ' + authErr(e)); });
+  }
+
+  function adminIssuesHtml() {
+    var list = state.adminIssues || [];
+    var head = '<div class="set-sec">Admin – adathibák' +
+      (list.length ? ' <span class="set-count">' + list.length + '</span>' : '') + '</div>';
+    if (!list.length) {
+      return head + '<div class="set-note">Nincs nyitott adathiba-jelzés.</div>';
+    }
+    return head + '<div class="admin-issues">' + list.slice(0, 40).map(function (i) {
+      var p = state.byId.get(+i.point_id);
+      var when = Date.parse(i.created_at) || Date.now();
+      return '<div class="admin-issue">' +
+        '<span class="rank-main"><b>' + esc(p ? p.name : ('#' + i.point_id)) + '</b>' +
+        '<small>' + esc([p && p.city, ISSUE_KINDS[i.kind], agoText(when)].filter(Boolean).join(' · ')) +
+        (i.note ? ' · ' + esc(i.note) : '') + '</small></span>' +
+        '<button class="p-btn" type="button" data-issue-resolve="' + i.id + '" data-point="' + i.point_id + '">Megoldva</button>' +
+      '</div>';
+    }).join('') + '</div>';
   }
 
   function communityOf(id) { return social.remote[id] || null; }
@@ -1501,9 +1616,31 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       })
       .catch(function () { });
 
-    return Promise.all([reportsP, ratingsP]).then(function () {
+    // ADATHIBA: a nyitott jelzésekből csak a darabszám kell (a kártyákra),
+    // plusz hogy a saját jelzéseimet jelölhessem a lapkán.
+    var issuesP = sb.from('point_issues')
+      .select('point_id,kind,user_id,created_at')
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .limit(2000)
+      .then(function (res) {
+        if (res.error) return;
+        social.issues = {};
+        var me = account.user && account.user.id;
+        (res.data || []).forEach(function (r) {
+          var at = Date.parse(r.created_at) || 0;
+          var it = social.issues[r.point_id];
+          if (!it) it = social.issues[r.point_id] = { count: 0, at: at, mine: {} };
+          it.count++;
+          if (at > it.at) it.at = at;
+          if (me && r.user_id === me) it.mine[r.kind] = true;
+        });
+      })
+      .catch(function () { });
+
+    return Promise.all([reportsP, ratingsP, issuesP]).then(function () {
       applyFilters();
-      if (selectedId != null) refreshSheetSocial();
+      if (selectedId != null) { refreshSheetSocial(); refreshSheetIssues(); }
     });
   }
 
@@ -3689,6 +3826,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
             ? '<span class="score ' + scoreClass(sc) + ' score-xs">' + sc + '</span>'
             : communityBadgeHtml(p.id)) +
           reportChipHtml(p.id) +
+          issueChipHtml(p.id) +
         '</span>' +
         '<span class="card-acts">' +
           '<button class="c-btn c-btn-go card-route" type="button" data-route="' + p.id + '">' +
@@ -3889,6 +4027,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.sheetDist.textContent = p._d != null ? fmtDist(p._d) + ' tőled' : '';
     refreshSheetFav();
     refreshSheetSocial();
+    refreshSheetIssues();
     refreshSheetRate();
     closeShare();
     setHoursOpen(false);
@@ -4069,6 +4208,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       var was = state.isAdmin;
       state.isAdmin = !r.error && r.data === true;
       if (was !== state.isAdmin && overlayKind === 'settings') openOverlay('settings');
+      if (state.isAdmin) loadAdminIssues();
     }).catch(function () { state.isAdmin = false; });
   }
 
@@ -4119,6 +4259,113 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     document.documentElement.dataset.theme = settings.theme === 'deep' ? 'deep' : 'default';
   }
 
+  /* --- offline térkép: a jelenlegi nézet csempéinek mentése --- */
+
+  var TILEJSON_URL = 'https://tiles.openfreemap.org/planet';
+  var SAVED_MAP_KEY = 'vissza.savedmap.v1';
+  var TILE_CACHE_SAVED = 'vissza-tiles-saved';
+  var savedTpl = null, savingMap = false;
+
+  function tileTemplate() {
+    if (savedTpl) return Promise.resolve(savedTpl);
+    return fetch(TILEJSON_URL, { cache: 'force-cache' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var t = j && j.tiles && j.tiles[0];
+        if (!t || t.indexOf('{z}') === -1) throw new Error('nincs tile url');
+        savedTpl = t;
+        return t;
+      });
+  }
+
+  function lonToX(lng, z) { return Math.floor((lng + 180) / 360 * Math.pow(2, z)); }
+
+  function latToY(lat, z) {
+    var r = lat * Math.PI / 180;
+    return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z));
+  }
+
+  function savedMapInfo() {
+    try { return JSON.parse(localStorage.getItem(SAVED_MAP_KEY) || 'null'); } catch (e) { return null; }
+  }
+
+  function savedMapHtml() {
+    var s = savedMapInfo();
+    return '<div class="set-sec">Offline térkép</div>' +
+      '<div class="set-row"><span class="set-main"><b>' + (s ? esc(s.name) : 'Nincs mentett terület') + '</b>' +
+        '<small>' + (s
+          ? (s.count + ' csempe · ' + new Date(s.at).toLocaleDateString('hu-HU'))
+          : 'A pontok offline is megvannak, a térkép csempéi nem') + '</small></span>' +
+        '<span class="set-opts">' +
+          '<button class="btn btn-ghost btn-sm" type="button" data-set="save-map">' + (s ? 'Újra' : 'Mentés') + '</button>' +
+          (s ? '<button class="btn btn-ghost btn-sm" type="button" data-set="clear-map">Törlés</button>' : '') +
+        '</span></div>' +
+      '<div class="set-note">A jelenlegi nézet környékét menti el a böngésző (kb. 8–15-ös nagyítás). ' +
+        'Nagy területnél ez eltarthat pár másodpercig.</div>';
+  }
+
+  async function saveMapArea() {
+    if (!map || savingMap) { if (!map) toast('Előbb nyisd meg a térképet'); return; }
+    savingMap = true;
+    toast('Térkép mentése…');
+    try {
+      var tpl = await tileTemplate();
+      var b = map.getBounds();
+      var z0 = Math.max(9, Math.min(14, Math.round(map.getZoom())));
+      var urls = [], z, x, y;
+
+      for (z = Math.max(8, z0 - 3); z <= z0 && urls.length < 400; z++) {
+        var x0 = lonToX(b.getWest(), z), x1 = lonToX(b.getEast(), z);
+        var y0 = latToY(b.getNorth(), z), y1 = latToY(b.getSouth(), z);
+        for (x = x0; x <= x1 && urls.length < 400; x++) {
+          for (y = y0; y <= y1 && urls.length < 400; y++) {
+            urls.push(tpl.replace('{z}', z).replace('{x}', x).replace('{y}', y));
+          }
+        }
+      }
+
+      var cache = await caches.open(TILE_CACHE_SAVED);
+      var done = 0, failed = 0;
+
+      for (var i = 0; i < urls.length; i += 6) {
+        await Promise.all(urls.slice(i, i + 6).map(function (u) {
+          return cache.match(u).then(function (hit) {
+            if (hit) { done++; return; }
+            return fetch(u, { mode: 'cors' }).then(function (r) {
+              if (r && r.ok) { done++; return cache.put(u, r.clone()); }
+              failed++;
+            }).catch(function () { failed++; });
+          });
+        }));
+      }
+
+      var c = map.getCenter(), best = null, bd = Infinity;
+      state.points.forEach(function (p) {
+        var d = dist(c.lat, c.lng, p.lat, p.lng);
+        if (d < bd) { bd = d; best = p; }
+      });
+      var name = best && best.city ? best.city : 'Mentett terület';
+
+      try {
+        localStorage.setItem(SAVED_MAP_KEY, JSON.stringify({ name: name, at: Date.now(), count: done }));
+      } catch (e) { }
+
+      toast(done + ' csempe mentve' + (failed ? ' · ' + failed + ' kimaradt' : ''));
+    } catch (e) {
+      toast('A térkép mentése nem sikerült (kevés a hely?)');
+    } finally {
+      savingMap = false;
+      if (overlayKind === 'settings') openOverlay('settings');
+    }
+  }
+
+  function clearMapArea() {
+    try { localStorage.removeItem(SAVED_MAP_KEY); } catch (e) { }
+    if ('caches' in window) caches.delete(TILE_CACHE_SAVED).catch(function () { });
+    toast('Mentett térkép törölve');
+    openOverlay('settings');
+  }
+
   function settingsHtml() {
     var themes = [['default', 'Alap sötét'], ['deep', 'Mély sötét']];
     var modes = [['', 'Automatikus'], ['driving', 'Autó'], ['cycling', 'Kerékpár'], ['foot', 'Gyalog']];
@@ -4143,6 +4390,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         '<div class="set-row"><span class="set-main"><b>Telepítés a főképernyőre</b><small>Ikonként indul, offline is működik</small></span>' +
           '<button class="btn btn-ghost btn-sm" type="button" data-set="install">Telepítés</button></div>' : '') +
 
+      blocksHtml() +
+      savedMapHtml() +
+
       '<div class="set-sec">Adatok</div>' +
       '<div class="set-row"><span class="set-main"><b>Helyi adatok törlése</b><small>Kedvencek, listák, értékelések és előzmények ezen az eszközön</small></span>' +
         '<button class="btn btn-ghost btn-sm" type="button" data-set="clear">Törlés</button></div>' +
@@ -4161,7 +4411,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
             '<button class="btn btn-primary" type="submit">Küldés mindenkinek</button>' +
           '</div>' +
           '<div class="set-note">A kiküldött üzenet azonnal megjelenik minden nyitott app Értesítések listájában.</div>' +
-        '</form>' :
+        '</form>' + adminIssuesHtml() :
         (account.user ?
           '<div class="set-sec">Admin</div>' +
           '<div class="set-row"><span class="set-main"><b>Ehhez admin jog kell</b><small>A(z) ' +
@@ -4929,6 +5179,68 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (s) s.textContent = text;
   }
 
+  var DATA_META_URL = 'data/repontok-meta.json';
+  var IDB_NAME = 'vissza-db', IDB_STORE = 'kv';
+  var idbPromise = null;
+  var DATA_AT = null;   // az éppen betöltött adat updatedAt értéke
+
+  /* IndexedDB: a pontok helyben, hogy visszatéréskor ne kelljen újra letölteni
+     és parse-olni az 1,3 MB-os JSON-t. Ha bármi hiba van, csendben kimarad. */
+
+  function idbOpen() {
+    if (!('indexedDB' in window)) return Promise.resolve(null);
+    if (idbPromise) return idbPromise;
+    idbPromise = new Promise(function (resolve) {
+      var rq;
+      try { rq = indexedDB.open(IDB_NAME, 1); } catch (e) { resolve(null); return; }
+      rq.onupgradeneeded = function () {
+        var db = rq.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      };
+      rq.onsuccess = function () { resolve(rq.result); };
+      rq.onerror = function () { resolve(null); };
+      rq.onblocked = function () { resolve(null); };
+    });
+    return idbPromise;
+  }
+
+  function idbGet(key) {
+    return idbOpen().then(function (db) {
+      if (!db) return null;
+      return new Promise(function (resolve) {
+        try {
+          var rq = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+          rq.onsuccess = function () { resolve(rq.result == null ? null : rq.result); };
+          rq.onerror = function () { resolve(null); };
+        } catch (e) { resolve(null); }
+      });
+    });
+  }
+
+  function idbSet(key, val) {
+    return idbOpen().then(function (db) {
+      if (!db) return;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).put(val, key);
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror = function () { resolve(); };
+          tx.onabort = function () { resolve(); };
+        } catch (e) { resolve(); }
+      });
+    }).catch(function () { });
+  }
+
+  async function fetchMeta() {
+    try {
+      var r = await fetch(DATA_META_URL, { cache: 'no-cache' });
+      if (!r.ok) return null;
+      var m = await r.json();
+      return m && typeof m === 'object' ? m : null;
+    } catch (e) { return null; }
+  }
+
   async function readCachedPoints() {
     if (!('caches' in window)) return null;
     try {
@@ -4989,19 +5301,37 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     hideLoaderOffline();
     loaderSay(isRetry ? 'Újrapróbálás…' : 'Adatok betöltése…');
 
+    // 1) kis meta kérése: ebből tudjuk, változott-e egyáltalán az adat
+    var meta = await fetchMeta();
     var points = null;
     var fromCache = false;
 
-    try {
-      var res = await fetch(DATA_URL, { cache: 'no-cache' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      rememberPoints(res);
-      loaderSay('Pontok előkészítése…');
-      points = await res.json();
-    } catch (e) {
-      loaderSay('Mentett adatok keresése…');
-      points = await readCachedPoints();
-      fromCache = !!points;
+    if (meta && meta.updatedAt) {
+      var saved = await idbGet('meta');
+      if (saved && saved.updatedAt === meta.updatedAt) {
+        loaderSay('Mentett adatok betöltése…');
+        points = await idbGet('points');
+        if (!Array.isArray(points) || !points.length) points = null;
+      }
+    }
+
+    // 2) ha nincs érvényes helyi másolat, jön a nagy fájl
+    if (!points) {
+      try {
+        var res = await fetch(DATA_URL, { cache: 'no-cache' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        rememberPoints(res);
+        loaderSay('Pontok előkészítése…');
+        points = await res.json();
+        idbSet('points', points);
+        if (meta) idbSet('meta', meta);
+      } catch (e) {
+        loaderSay('Mentett adatok keresése…');
+        points = await readCachedPoints();
+        if (!points) points = await idbGet('points');
+        fromCache = !!points;
+        meta = null;
+      }
     }
 
     if (!points || !points.length) {
@@ -5011,6 +5341,16 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       return;
     }
 
+    // 3) ugyanaz az adat, mint ami már a képernyőn van: nincs újrarenderelés
+    if (ready.data && meta && DATA_AT && meta.updatedAt === DATA_AT) {
+      state.offlineData = false;
+      paintNet();
+      hideLoaderOffline();
+      maybeHideLoader();
+      return;
+    }
+
+    if (meta && meta.updatedAt) DATA_AT = meta.updatedAt;
     state.offlineData = fromCache;
     paintNet();
     if (fromCache) loaderSay('Mentett adatok betöltése…');
@@ -5816,6 +6156,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         return;
       }
       if (k === 'push') { togglePush(); return; }
+      if (k === 'save-map') { saveMapArea(); return; }
+      if (k === 'clear-map') { clearMapArea(); return; }
       if (k === 'install') {
         if (state.installEvt && state.installEvt.prompt) {
           state.installEvt.prompt();
@@ -5867,6 +6209,23 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       });
     }
     if (el.reportFig) el.reportFig.addEventListener('click', toggleReportsOpen);
+
+    // adathiba jelzése a lapkán
+    if (el.issueBtns) {
+      el.issueBtns.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-issue]');
+        if (!b) return;
+        sendIssue(b.dataset.issue);
+      });
+    }
+
+    // moderáció: üzenet jelentése / tiltás / feloldás, adathiba lezárása
+    document.addEventListener('click', function (e) {
+      var res = e.target.closest('[data-issue-resolve]');
+      if (res) { resolveIssue(res.dataset.issueResolve, +res.dataset.point); return; }
+      var ub = e.target.closest('[data-unblock]');
+      if (ub) { unblockUser(ub.dataset.unblock); return; }
+    });
 
     // megosztás-ablak
     if (el.shareClose) el.shareClose.addEventListener('click', closeShare);
@@ -6367,6 +6726,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     pendingPoint: null,   // barátnak küldésre kijelölt pont
     presence: {},     // userId -> utolsó aktivitás (ms)
     pokeList: [],     // az utóbbi bökések (megjelenítve a Barátok oldalon)
+    blocks: {},       // blockedUserId -> true
+    blockNames: {},   // blockedUserId -> megjelenített név
     loaded: false
   };
   var socialTimer = 0, socialTickN = 0;
@@ -6399,6 +6760,116 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     a = String(a); b = String(b);
     return a < b ? { user_id: a, friend_id: b } : { user_id: b, friend_id: a };
   }
+
+  /* --- moderáció: tiltás, jelentés --- */
+
+  function loadBlocks() {
+    if (!sb || !account.user) { soc.blocks = {}; soc.blockNames = {}; return Promise.resolve(); }
+    return sb.from('user_blocks').select('blocked_id').eq('blocker_id', account.user.id)
+      .then(function (r) {
+        if (r.error) return;
+        soc.blocks = {};
+        (r.data || []).forEach(function (x) { soc.blocks[x.blocked_id] = true; });
+        return loadBlockNames();
+      })
+      .catch(function () { });
+  }
+
+  function loadBlockNames() {
+    var ids = Object.keys(soc.blocks || {});
+    if (!ids.length || !sb) { soc.blockNames = {}; return Promise.resolve(); }
+    return sb.from('user_names').select('id,display_name').in('id', ids)
+      .then(function (r) {
+        if (r.error || !r.data) return;
+        r.data.forEach(function (u) { soc.blockNames[u.id] = u.display_name || 'Ismeretlen'; });
+      })
+      .catch(function () { });
+  }
+
+  function blockUser(uid, name) {
+    if (!requireLogin('A tiltáshoz') || !uid || uid === account.user.id) return;
+    if (!window.confirm('Tiltod ' + (name || 'ezt a felhasználót') + '? Az üzenetei eltűnnek.')) return;
+    sb.from('user_blocks').insert({ blocker_id: account.user.id, blocked_id: uid })
+      .then(function (r) {
+        if (r.error && r.error.code !== '23505') throw r.error;
+        soc.blocks[uid] = true;
+        soc.blockNames[uid] = soc.blockNames[uid] || name;
+        if (soc.chatId) refreshChat(false);
+        repaintFriendsList();
+        toast('Felhasználó tiltva');
+      })
+      .catch(function (e) { toast('Nem sikerült: ' + authErr(e)); });
+  }
+
+  function unblockUser(uid) {
+    if (!requireLogin('A feloldáshoz')) return;
+    sb.from('user_blocks').delete().eq('blocker_id', account.user.id).eq('blocked_id', uid)
+      .then(function (r) {
+        if (r.error) throw r.error;
+        delete soc.blocks[uid];
+        delete soc.blockNames[uid];
+        toast('Tiltás feloldva');
+        openOverlay('settings');
+        if (soc.chatId) refreshChat(false);
+      })
+      .catch(function (e) { toast('Nem sikerült: ' + authErr(e)); });
+  }
+
+  function reportMessage(mid) {
+    if (!requireLogin('A jelentéshez')) return;
+    sb.from('message_reports').insert({ message_id: +mid, reporter_id: account.user.id, reason: 'abuse' })
+      .then(function (r) {
+        if (r.error && r.error.code !== '23505') throw r.error;
+        toast('Köszönjük, megnézzük a jelentést');
+      })
+      .catch(function (e) { toast('Nem sikerült: ' + authErr(e)); });
+  }
+
+  function blocksHtml() {
+    if (!account.user) return '';
+    var ids = Object.keys(soc.blocks || {});
+    if (!ids.length) {
+      return '<div class="set-sec">Moderáció</div>' +
+        '<div class="set-note">Nincs tiltott felhasználód. Egy üzenetnél a ⋯ gombbal tudsz jelenteni vagy tiltani.</div>';
+    }
+    return '<div class="set-sec">Moderáció</div>' + ids.map(function (id) {
+      return '<div class="set-row"><span class="set-main"><b>' + esc(soc.blockNames[id] || 'Tiltott felhasználó') +
+        '</b><small>Az üzenetei rejtve vannak</small></span>' +
+        '<button class="btn btn-ghost btn-sm" type="button" data-unblock="' + esc(id) + '">Feloldás</button></div>';
+    }).join('');
+  }
+
+  var modMenu = null;
+
+  function closeModMenu() {
+    if (modMenu) { modMenu.remove(); modMenu = null; }
+  }
+
+  function openModMenu(anchor, mid, uid) {
+    closeModMenu();
+    var m = document.createElement('div');
+    m.className = 'mod-menu';
+    m.innerHTML = '<button type="button" data-mod="report">Jelentés</button>' +
+      '<button type="button" data-mod="block" class="is-danger">Tiltás</button>';
+    document.body.appendChild(m);
+    var r = anchor.getBoundingClientRect();
+    m.style.left = Math.min(window.innerWidth - 170, Math.max(8, r.left - 70)) + 'px';
+    m.style.top = Math.min(window.innerHeight - 90, r.bottom + 6) + 'px';
+    modMenu = m;
+    m.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-mod]');
+      if (!b) return;
+      var act = b.dataset.mod;
+      closeModMenu();
+      if (act === 'report') reportMessage(mid);
+      else blockUser(uid, nameOf(uid));
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!modMenu) return;
+    if (!e.target.closest('.mod-menu') && !e.target.closest('[data-mod="menu"]')) closeModMenu();
+  });
 
   function loadUserNames(ids) {
     if (!sb || !account.user) return Promise.resolve();
@@ -6806,8 +7277,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     var firstUnread = unread ? soc.msgs.length - unread : -1;
     var lastDay = '';
     var out = [];
+    var hidden = 0;
 
     soc.msgs.forEach(function (m, i) {
+      if (soc.blocks[m.sender_id]) { hidden++; return; }
       var k = dayKey(m.at);
       if (k !== lastDay) {
         lastDay = k;
@@ -6824,8 +7297,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         (!mine && c && c.kind === 'group' ? '<span class="msg-who">' + esc(nameOf(m.sender_id)) + '</span>' : '') +
         '<span class="msg-bubble">' + body + '</span>' +
         '<span class="msg-time">' + new Date(m.at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' }) + '</span>' +
+        (!mine ? '<button class="msg-more" type="button" data-mod="menu" data-mid="' + m.id +
+          '" data-uid="' + esc(m.sender_id) + '" aria-label="Üzenet beállításai">⋯</button>' : '') +
       '</div>');
     });
+
+    if (hidden) out.push('<div class="chat-hint">' + hidden + ' üzenet rejtve (tiltott felhasználó).</div>');
 
     return out.join('');
   }
@@ -6928,6 +7405,11 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         if (!jump) return;
         jump.hidden = (box.scrollHeight - box.scrollTop - box.clientHeight) < 120;
       });
+      box.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-mod="menu"]');
+        if (!b) return;
+        openModMenu(b, b.dataset.mid, b.dataset.uid);
+      });
     }
     if (jump && jump.dataset.bound !== '1') {
       jump.dataset.bound = '1';
@@ -6960,7 +7442,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   function refreshFriendData() {
     if (!sb || !account.user) { updateFriendsDot(); return Promise.resolve(); }
-    return loadFriends().then(loadConvs).then(function () {
+    return loadBlocks().then(loadFriends).then(loadConvs).then(function () {
       return loadUserNames((soc.pokeList || []).map(function (p) { return p.from_id; }));
     }).then(function () {
       repaintFriendsList();
@@ -7551,6 +8033,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
      'sheetFav', 'sheetFavPc', 'sheetCommunity', 'reportBtns', 'reportStatus',
      'reportFig', 'reportFigHint', 'reportsPop',
+     'issueBtns', 'issueStatus', 'issueNote',
      'sheetHero', 'sheetMapHint', 'sheetTopbar',
      'hoursCard', 'hoursOpen', 'hoursClose',
      'sheetShare', 'sheetSharePc', 'shareBox', 'sharePop', 'sharePopBack', 'shareClose',

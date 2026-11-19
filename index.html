@@ -832,6 +832,22 @@
     <p class="sheet-note reports-hint">A jelzés 1 óráig látszik a térképen. Jelenteni bejelentkezve tudsz.</p>
   </div>
 
+  <!-- ============ Adathiba ============ -->
+  <div class="issues" id="issueBox">
+    <div class="issues-head">
+      <span class="fb-eyebrow">Adathiba</span>
+      <span class="issues-status" id="issueStatus">Nincs adathiba-jelzés</span>
+    </div>
+    <p class="issues-sub">Megszűnt az üzlet, rossz helyen van, vagy nem stimmel a nyitvatartás? Jelezd — átnézzük.</p>
+    <div class="issues-actions" id="issueBtns" role="group" aria-label="Adathiba jelzése">
+      <button class="issue-btn" type="button" data-issue="closed">Megszűnt</button>
+      <button class="issue-btn" type="button" data-issue="moved">Rossz helyen</button>
+      <button class="issue-btn" type="button" data-issue="hours">Nyitvatartás</button>
+      <button class="issue-btn" type="button" data-issue="other">Egyéb</button>
+    </div>
+    <input class="issue-note" id="issueNote" type="text" maxlength="280" placeholder="Megjegyzés (nem kötelező)">
+  </div>
+
   </div>
 
   <div class="sheet-col sheet-col-b">

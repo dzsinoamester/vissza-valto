@@ -52,6 +52,23 @@ futtatása után érdemes újrafuttatni, ha új irányítószámok jelentek meg.
 
 Az oldal induláskor és félóránként automatikusan betölti ezeket (a böngésző gyorsítótára nélkül).
 
+### Automatikus adatfrissítés
+
+A `.github/workflows/data-refresh.yml` naponta 03:17 UTC-kor (nyáron 05:17, télen 04:17 magyar idő)
+lefuttatja a `fetch-data.mjs`-t, frissíti a megye-táblát, majd a `tools/check-data.mjs` ellenőrzi az eredményt:
+
+* **hiba** esetén a workflow megáll és nem commitol (üres vagy elromlott API-válasz, 10%-nál nagyobb
+  visszaesés, duplikált id, országon kívüli koordináta, hiányzó név, meta-eltérés);
+* ha minden rendben és tényleg változott valami a `data/` mappában, commitolja és pusholja.
+
+Kézi indítás: GitHub → Actions → **Adatfrissítés** → *Run workflow*. Helyi ellenőrzés:
+
+```bash
+node tools/check-data.mjs                 # hibák / figyelmeztetések
+node tools/check-data.mjs --strict        # a figyelmeztetés is hiba
+node tools/check-data.mjs --baseline data/repontok.json   # összevetés egy korábbi mentéssel
+```
+
 ## Bejelentkezés (Supabase)
 
 Az oldal statikus, a fiókokat a projekt Supabase példánya kezeli (`js/config.js`). A beállítás:
@@ -157,10 +174,55 @@ data/supabase-schema.sql  profiles + ratings tábla, RLS
 data/supabase-extra.sql   profil RLS, regisztrációs trigger, fióktörlés
 data/supabase-social.sql  jelentések, kedvencek, látogatások, értékelés-összesítő
 data/supabase-friends.sql barátok, csoportok, chat, bökés, névvel ellátott értékelések
+data/supabase-issues.sql      adathiba-jelzések (megszűnt / rossz hely / nyitvatartás)
+data/supabase-moderation.sql  tiltás, üzenet-jelentés
+data/supabase-push.sql        push feliratkozások
 tools/fetch-data.mjs  adatfrissítés
+tools/check-data.mjs  letöltött adat ellenőrzése (a napi workflow is ezt futtatja)
 tools/gen-megye.mjs   irányítószám -> megye tábla generálása
 tools/serve.mjs       helyi kiszolgáló fejlesztéshez
 ```
+
+## Adathiba-jelzés
+
+A lapka „Adathiba” blokkjában bárki jelezheti, hogy egy pont **megszűnt**, **rossz helyen van**,
+**rossz a nyitvatartása**, vagy egyéb gond van vele (opcionális megjegyzéssel). A jelzés bejelentkezéshez
+kötött, és felhasználónként/ként egyszer adható le. A nyitott jelzések száma a kártyán `⚑` jelvényként
+jelenik meg, és a lapkán is látszik, hogy a saját jelzésed aktív-e.
+
+Telepítés: futtasd a `data/supabase-issues.sql` fájlt a Supabase SQL Editorban. Adminként a
+**Beállítások → Admin – adathibák** listában látod a nyitott jelzéseket, és a „Megoldva” gombbal
+lezárhatod őket.
+
+## Moderáció
+
+Az üzenetek mellett megjelenő `⋯` menüből **jelentheted** az üzenetet, vagy **tiltód** a felhasználót.
+A tiltott felhasználó üzenetei eltűnnek (a szerver is kiszűri őket), a tiltás a
+**Beállítások → Moderáció** alatt oldható fel.
+
+Telepítés: `data/supabase-moderation.sql` a Supabase SQL Editorban.
+
+## Offline térkép
+
+A **Beállítások → Offline térkép** a jelenlegi nézet környékének csempéit menti el a böngészőbe
+(kb. 8–15-ös nagyítás, legfeljebb 400 csempe), így a pontok mellett a térkép is látszik háló nélkül.
+A mentett terület a `vissza-tiles-saved` cache-ben van, amit a service worker nem trimmel; a
+„Törlés” gomb üríti.
+
+## Web push bekapcsolása
+
+A kliens és a `supabase/functions/send-push` function készen van, a VAPID kulcspár generálva
+(a publikus a `js/config.js`-ben, a privát a **gitbe nem kerülő** `.secrets/vapid-private.txt`-ben).
+Már csak ezek kellenek:
+
+1. `data/supabase-push.sql` futtatása a Supabase SQL Editorban.
+2. Supabase → Edge Functions → Secrets: `VAPID_PUBLIC`, `VAPID_PRIVATE` (a fájl tartalma),
+   `VAPID_SUBJECT` (pl. `mailto:dzsinokalla@gmail.com`).
+3. `supabase functions deploy send-push --project-ref kukzlgfsabhgvnqvqfvc`
+   (vagy a function kódjának bemásolása a Dashboardon).
+
+Utána a Beállításokban megjelenő kapcsolóval lehet feliratkozni, és az admin értesítés küldésekor
+a push is kimegy. A privát kulcsot soha ne írd a repóba vagy a kliens kódjába.
 
 ## Arculat
 

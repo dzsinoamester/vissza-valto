@@ -1,0 +1,74 @@
+name: Adatfrissítés
+
+on:
+  schedule:
+    # minden nap 03:17 UTC-kor (nyáron 05:17, télen 04:17 magyar idő)
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: data-refresh
+  cancel-in-progress: false
+
+jobs:
+  frissites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Repó letöltése
+        uses: actions/checkout@v4
+
+      - name: Node beállítása
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Előző adat megőrzése (összehasonlításhoz)
+        run: cp data/repontok.json /tmp/repontok-elozo.json
+
+      - name: Pontok letöltése a MOHU API-ról
+        run: node tools/fetch-data.mjs
+
+      - name: Megye-tábla frissítése
+        continue-on-error: true
+        run: node tools/gen-megye.mjs
+
+      - name: Adatok ellenőrzése
+        run: node tools/check-data.mjs --baseline /tmp/repontok-elozo.json
+
+      - name: Változások összegzése a futásnaplóba
+        run: |
+          node -e "
+            try {
+              const c = require('./data/changes.json');
+              console.log('Összes pont:', c.counts.total);
+              console.log('Új:', c.counts.added, '| megszűnt:', c.counts.removed,
+                          '| elmozdult:', c.counts.moved, '| nyitvatartás:', c.counts.hours);
+            } catch (e) {
+              console.log('Ehhez a futáshoz nincs changes.json.');
+            }
+          "
+
+      - name: Commit és push (csak ha változott)
+        run: |
+          if git diff --quiet -- data/; then
+            echo "Nincs adatváltozás, nincs commit."
+            exit 0
+          fi
+          git config user.name "vissza-adatbot"
+          git config user.email "adatbot@users.noreply.github.com"
+          git add data/
+          git commit -m "data: automatikus frissítés $(date -u +%Y-%m-%d)"
+          # ha közben valaki más pusholt, rebase-eljük a saját commitunkat
+          ok=0
+          for i in 1 2 3; do
+            if git pull --rebase --autostash && git push; then ok=1; break; fi
+            sleep 5
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::Az adatfrissítés commitja nem került fel a távoli repóra."
+            exit 1
+          fi

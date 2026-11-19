@@ -2,10 +2,11 @@
    Cél: az app és a pont-adatok offline is betöltsenek, a térképcsempék
    pedig a már megnézett területekről maradjanak meg. */
 
-var VERSION = 'v2';
+var VERSION = 'v3';
 var SHELL_CACHE = 'vissza-shell-' + VERSION;
 var DATA_CACHE = 'vissza-data-' + VERSION;
 var TILE_CACHE = 'vissza-tiles';
+var SAVED_TILE_CACHE = 'vissza-tiles-saved';   // kézzel mentett terület, nem trimmeljük
 var CDN_CACHE = 'vissza-cdn-' + VERSION;
 var PAGE_CACHE = 'vissza-offline';   // az oldal saját mentése (app.js), ne töröljük
 var TILE_LIMIT = 450;
@@ -46,7 +47,7 @@ self.addEventListener('install', function (event) {
 
 self.addEventListener('activate', function (event) {
   event.waitUntil((async function () {
-    var keep = [SHELL_CACHE, DATA_CACHE, TILE_CACHE, CDN_CACHE, PAGE_CACHE];
+    var keep = [SHELL_CACHE, DATA_CACHE, TILE_CACHE, SAVED_TILE_CACHE, CDN_CACHE, PAGE_CACHE];
     var keys = await caches.keys();
     await Promise.all(keys.map(function (k) {
       if (keep.indexOf(k) === -1) return caches.delete(k);
@@ -60,6 +61,11 @@ self.addEventListener('message', function (event) {
   if (msg.type === 'SKIP_WAITING') self.skipWaiting();
   if (msg.type === 'VERSION') {
     event.source && event.source.postMessage({ type: 'VERSION', version: VERSION });
+  }
+  if (msg.type === 'CLEAR_SAVED_TILES') {
+    event.waitUntil(caches.delete(SAVED_TILE_CACHE).then(function () {
+      event.source && event.source.postMessage({ type: 'SAVED_TILES_CLEARED' });
+    }));
   }
 });
 
@@ -115,8 +121,12 @@ async function staleWhileRevalidate(request, cacheName) {
   return new Response('', { status: 504, statusText: 'Offline' });
 }
 
-/* csempék: cache előbb, és max. TILE_LIMIT darabig gyűjtünk */
+/* csempék: a kézzel mentett terület mindig elsőbbséget kap */
 async function tileFirst(request) {
+  var saved = await caches.open(SAVED_TILE_CACHE);
+  var savedHit = await saved.match(request);
+  if (savedHit) return savedHit;
+
   var cache = await caches.open(TILE_CACHE);
   var hit = await cache.match(request);
   if (hit) return hit;
