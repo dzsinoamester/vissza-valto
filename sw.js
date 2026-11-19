@@ -7,6 +7,7 @@ var SHELL_CACHE = 'vissza-shell-' + VERSION;
 var DATA_CACHE = 'vissza-data-' + VERSION;
 var TILE_CACHE = 'vissza-tiles';
 var CDN_CACHE = 'vissza-cdn-' + VERSION;
+var PAGE_CACHE = 'vissza-offline';   // az oldal saját mentése (app.js), ne töröljük
 var TILE_LIMIT = 450;
 
 var SHELL_ASSETS = [
@@ -24,6 +25,8 @@ var SHELL_ASSETS = [
 
 var DATA_ASSETS = [
   './data/repontok.json',
+  './data/repontok-meta.json',
+  './data/changes.json',
   './data/zip-megye.json'
 ];
 
@@ -43,7 +46,7 @@ self.addEventListener('install', function (event) {
 
 self.addEventListener('activate', function (event) {
   event.waitUntil((async function () {
-    var keep = [SHELL_CACHE, DATA_CACHE, TILE_CACHE, CDN_CACHE];
+    var keep = [SHELL_CACHE, DATA_CACHE, TILE_CACHE, CDN_CACHE, PAGE_CACHE];
     var keys = await caches.keys();
     await Promise.all(keys.map(function (k) {
       if (keep.indexOf(k) === -1) return caches.delete(k);
@@ -88,6 +91,7 @@ async function networkFirst(request, cacheName) {
     return res;
   } catch (e) {
     var hit = await cache.match(request, { ignoreSearch: true });
+    if (!hit) hit = await caches.match(request, { ignoreSearch: true });
     if (hit) {
       var headers = new Headers(hit.headers);
       headers.set('x-vissza-offline', '1');

@@ -10161,6 +10161,44 @@ body.is-offline .offline-chip { display: inline-flex; }
   .art-hint { left: 12px; bottom: 10px; font-size: 10px; }
 }
 
+/* --- betöltő: offline állapot (ne fejlesztői üzenet legyen) --- */
+.loader.is-error .ld-track,
+.loader.is-error .ld-status { display: none; }
+.ld-offline {
+  max-width: 320px;
+  margin-top: 18px;
+  text-align: center;
+}
+.ld-offline-title {
+  margin: 0 0 8px;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+  color: #F4F6F8;
+}
+.ld-offline-text {
+  margin: 0 0 16px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, .52);
+}
+.ld-retry {
+  height: 42px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, .04));
+  color: #F2F3F5;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease;
+}
+.ld-retry:hover { border-color: rgba(127, 201, 236, .55); background: rgba(127, 201, 236, .12); }
+.ld-retry:focus-visible { outline: 2px solid #7FC9EC; outline-offset: 3px; }
+
 /* a régi, nagyobb specificitású mobil magasság felülírása */
 @media (max-width: 900px) {
   .intro-slide:not(.intro-slide--cta).is-active .intro-art {

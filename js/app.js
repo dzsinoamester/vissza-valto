@@ -29,6 +29,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   var selectedId = null;
   var handlersBound = false;
   var ready = { data: false, style: false };
+  var styleGuard = 0;   // offline: ne ragadjon örökre a betöltőn, ha a stílus nem érkezik meg
   var pendingPlace = null;   // a stílus betöltéséig függőben lévő „tegyük le a jelölőt" lépés
   var nav = null;            // aktív turn-by-turn navigáció állapota
   var stepIdx = -1;          // kiválasztott útvonal-lépés előnézetben (-1 = nincs)
@@ -361,7 +362,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   }
 
   function paintNet() {
-    var off = navigator.onLine === false;
+    var off = navigator.onLine === false || state.offlineData === true;
     if (el.offlineChip) el.offlineChip.hidden = !off;
     document.body.classList.toggle('is-offline', off);
   }
@@ -2164,6 +2165,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     map.once('load', function () { collapseAttrib(); setTimeout(collapseAttrib, 400); });
 
     map.on('style.load', onStyleLoad);
+    styleGuard = setTimeout(function () {
+      styleGuard = 0;
+      if (ready.style) return;
+      ready.style = true;
+      maybeHideLoader();
+    }, 12000);
     var styleRetried = false;
     map.on('error', function (e) {
       var msg = e && e.error ? String(e.error.message || e.error) : '';
@@ -2181,6 +2188,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   }
 
   function onStyleLoad() {
+    if (styleGuard) { clearTimeout(styleGuard); styleGuard = 0; }
     // a színeket a saját stílus (map/style.json) adja – nincs utólagos átfestés
     applySky();
     addBuildings3D();
@@ -4911,41 +4919,103 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   /* ==================== adat ==================== */
 
+  var DATA_URL = 'data/repontok.json';
+  // Az oldal saját mentése: akkor is működik, ha a service worker épp nem irányít
+  // (iOS-en ez elfordul), és a sw.js activate nem törli.
+  var PAGE_CACHE = 'vissza-offline';
+
   function loaderSay(text) {
     var s = document.getElementById('loaderStatus');
     if (s) s.textContent = text;
   }
 
-  async function loadData() {
+  async function readCachedPoints() {
+    if (!('caches' in window)) return null;
     try {
-      loaderSay('Adatok betöltése…');
-      var res = await fetch('data/repontok.json', { cache: 'no-cache' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      loaderSay('Pontok előkészítése…');
-      var points = await res.json();
-      state.points = points;
-      state.byId.clear();
-      state.points.forEach(function (p) {
-        p._hay = stripAcc([p.name, p.address, p.city, p.zip].filter(Boolean).join(' ')) + extraHay(p);
-        state.byId.set(p.id, p);
-      });
-      ready.data = true;
-      loaderSay('Térkép és lista összeállítása…');
-      renderRecent();
-      refreshSocial();
-      maybeHideLoader();
-      applyFilters();
-      loadMeta();
-      loadChanges();
-      // a profil látogatás/kedvenc/sorozat szekciói pontok nélkül üresek maradnának
-      if (overlayKind === 'profile') openOverlay('profile');
-      var pos = positionFromHash();
-      if (pos) setMe(pos.lat, pos.lng, null);
-      openPointFromHash();
-      setTimeout(maybeIntro, 700);
+      var hit = await caches.match(DATA_URL, { ignoreSearch: true });
+      if (!hit) return null;
+      var points = await hit.json();
+      return Array.isArray(points) && points.length ? points : null;
     } catch (e) {
-      loaderSay('Nem sikerült betölteni az adatokat – generáld le: node tools/fetch-data.mjs');
+      return null;
     }
+  }
+
+  function rememberPoints(res) {
+    if (!('caches' in window)) return;
+    try {
+      var copy = res.clone();
+      caches.open(PAGE_CACHE).then(function (c) {
+        return c.put(DATA_URL, copy);
+      }).catch(function () { });
+    } catch (e) { }
+  }
+
+  function showLoaderOffline() {
+    loaderSay('Nincs internetkapcsolat');
+    if (el.loader) el.loader.classList.add('is-error');
+    if (el.loaderOffline) el.loaderOffline.hidden = false;
+  }
+
+  function hideLoaderOffline() {
+    if (el.loader) el.loader.classList.remove('is-error');
+    if (el.loaderOffline) el.loaderOffline.hidden = true;
+  }
+
+  function applyPoints(points) {
+    state.points = points;
+    state.byId.clear();
+    state.points.forEach(function (p) {
+      p._hay = stripAcc([p.name, p.address, p.city, p.zip].filter(Boolean).join(' ')) + extraHay(p);
+      state.byId.set(p.id, p);
+    });
+    ready.data = true;
+    loaderSay('Térkép és lista összeállítása…');
+    renderRecent();
+    refreshSocial();
+    maybeHideLoader();
+    applyFilters();
+    loadMeta();
+    loadChanges();
+    // a profil látogatás/kedvenc/sorozat szekciói pontok nélkül üresek maradnának
+    if (overlayKind === 'profile') openOverlay('profile');
+    var pos = positionFromHash();
+    if (pos) setMe(pos.lat, pos.lng, null);
+    openPointFromHash();
+    setTimeout(maybeIntro, 700);
+  }
+
+  async function loadData(isRetry) {
+    hideLoaderOffline();
+    loaderSay(isRetry ? 'Újrapróbálás…' : 'Adatok betöltése…');
+
+    var points = null;
+    var fromCache = false;
+
+    try {
+      var res = await fetch(DATA_URL, { cache: 'no-cache' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      rememberPoints(res);
+      loaderSay('Pontok előkészítése…');
+      points = await res.json();
+    } catch (e) {
+      loaderSay('Mentett adatok keresése…');
+      points = await readCachedPoints();
+      fromCache = !!points;
+    }
+
+    if (!points || !points.length) {
+      // ha már van betöltött adat, ne borítsuk rá a betöltőt a működő felületre
+      if (ready.data) { toast('Nincs internet – a mentett adatok maradtak'); return; }
+      showLoaderOffline();
+      return;
+    }
+
+    state.offlineData = fromCache;
+    paintNet();
+    if (fromCache) loaderSay('Mentett adatok betöltése…');
+    applyPoints(points);
+    if (fromCache) toast('Offline – a mentett pontokból');
   }
 
   function positionFromHash() {
@@ -5323,7 +5393,14 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     loadSettings();
     registerServiceWorker();
     paintNet();
-    window.addEventListener('online', paintNet);
+    window.addEventListener('online', function () {
+      paintNet();
+      if (!state.offlineData) return;
+      // visszatért a háló: csendben frissítjük a mentett adatot
+      state.offlineData = false;
+      paintNet();
+      loadData(true);
+    });
     window.addEventListener('offline', paintNet);
 
     // indítóparancsok a PWA-gyorsparancsokból (?go=search|profile)
@@ -7485,7 +7562,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'sheetStatusBox', 'sheetStatusText', 'sheetStatusSub', 'sheetStatusBar',
      'hoursBlock', 'hoursToggle',
      'sheetClose', 'sheetClosePc', 'sheetRoute', 'copyAddr',
-     'toast', 'loader', 'statAll', 'statAuto', 'statKezi', 'toolFilter', 'toolLocate', 'tool3D', 'mapTip',
+     'toast', 'loader', 'loaderOffline', 'loaderRetry', 'statAll', 'statAuto', 'statKezi', 'toolFilter', 'toolLocate', 'tool3D', 'mapTip',
      'routeCard', 'routeClose', 'routeModes', 'routeDist', 'routeTime', 'routeName',
      'routeFuel', 'garage', 'garageBack', 'garageClose', 'garageList', 'garageAdd', 'garageSave',
      'garageOpen', 'garageChipIco', 'garageChipName',
@@ -7507,6 +7584,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     applyGarageUI();
     window.__t = { setMe: setMe, startRoute: startRoute, paintMe: paintMe, state: state, map: function () { return map; } }; // TEMP-DEBUG
     setTimeout(maybeFirstGarage, 1500);
+    if (el.loaderRetry) el.loaderRetry.addEventListener('click', function () { loadData(true); });
     loadData();
   }
 
