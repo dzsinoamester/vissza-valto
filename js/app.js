@@ -796,6 +796,103 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   function introSeen() { return readJSON(INTRO_KEY, false) === true; }
 
+  var INTRO_ACCENT = '#8AC4E4';
+
+  // A 3. dia értékelő csúszkája valóban húzható (egérrel, ujjal és nyílbillentyűvel).
+  function introScale() {
+    if (!el.introSlides) return;
+    var track = el.introSlides.querySelector('.mock-track');
+    if (!track || track._scale) return;
+    track._scale = true;
+    var knob = track.querySelector('.mock-knob');
+    var card = track.closest('.mock-card');
+    var out = card ? card.querySelector('.mock-scale b') : null;
+    var value = 8;
+
+    function paint() {
+      if (knob) knob.style.left = ((value - 1) / 9 * 100) + '%';
+      if (out) out.textContent = value;
+      track.setAttribute('aria-valuenow', String(value));
+    }
+    function setFromX(clientX) {
+      var r = track.getBoundingClientRect();
+      if (!r.width) return;
+      value = Math.max(1, Math.min(10, Math.round(((clientX - r.left) / r.width) * 9) + 1));
+      paint();
+    }
+
+    track.addEventListener('pointerdown', function (e) {
+      e.stopPropagation();
+      setFromX(e.clientX);
+      try { track.setPointerCapture(e.pointerId); } catch (err) { }
+      var move = function (ev) { setFromX(ev.clientX); };
+      var up = function () {
+        track.removeEventListener('pointermove', move);
+        track.removeEventListener('pointerup', up);
+        track.removeEventListener('pointercancel', up);
+      };
+      track.addEventListener('pointermove', move);
+      track.addEventListener('pointerup', up);
+      track.addEventListener('pointercancel', up);
+    });
+
+    track.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      e.stopPropagation();
+      value = Math.max(1, Math.min(10, value + (e.key === 'ArrowRight' ? 1 : -1)));
+      paint();
+    });
+
+    paint();
+  }
+
+  // A 2. dia üzemállapot-jelzései és a 3. dia címkéi kattinthatók.
+  function introDemo() {
+    if (!el.introSlides || el.introSlides._demo) return;
+    el.introSlides._demo = true;
+
+    var slide = el.introSlides.children[1];
+    var art = slide ? slide.querySelector('.intro-art') : null;
+    var card = art ? art.querySelector('.mock-card') : null;
+    if (!art || !card) return;
+
+    var top = card.querySelector('.mock-top');
+    var title = card.querySelector('[data-mock-title]');
+    var sub = card.querySelector('[data-mock-sub]');
+    var pill = card.querySelector('[data-mock-pill]');
+
+    var STATES = {
+      tele: { title: 'Tele van · 12 perce', sub: 'Mindenkinek látszik a térképen', cls: 'mock-pill is-tired', warn: true },
+      urult: { title: 'Kiürült · 2 perce', sub: 'Friss jelzés a közösségtől', cls: 'mock-pill is-open', warn: false },
+      hibas: { title: 'Nem fogadja · 5 perce', sub: 'Mindenkinek látszik a térképen', cls: 'mock-pill is-tired', warn: true }
+    };
+
+    el.introSlides.addEventListener('click', function (e) {
+      var chip = e.target.closest('.mock-chip');
+      if (!chip) return;
+      e.stopPropagation();
+
+      if (chip.hasAttribute('data-state')) {
+        var st = STATES[chip.getAttribute('data-state')];
+        if (!st) return;
+        Array.prototype.forEach.call(art.querySelectorAll('.mock-chip[data-state]'), function (c) {
+          var on = c === chip;
+          c.classList.toggle('is-on', on);
+          c.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        if (title) title.textContent = st.title;
+        if (sub) sub.textContent = st.sub;
+        if (pill) pill.className = st.cls;
+        if (top) top.classList.toggle('is-warn', !!st.warn);
+        return;
+      }
+
+      var on2 = chip.classList.toggle('is-on');
+      chip.setAttribute('aria-pressed', on2 ? 'true' : 'false');
+    });
+  }
+
   function introSlide(i) {
     if (!el.introSlides) return;
     var slides = el.introSlides.children;
@@ -804,9 +901,21 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     Array.prototype.forEach.call(slides, function (s, k) {
       s.classList.toggle('is-active', k === introIndex);
     });
+
+    // lépésszámláló
+    if (el.introView) {
+      el.introView.style.setProperty('--ia', INTRO_ACCENT);
+      el.introView.dataset.step = String(introIndex);
+    }
+    if (el.introStep) {
+      el.introStep.textContent =
+        String(introIndex + 1).padStart(2, '0') + ' / ' + String(slides.length).padStart(2, '0');
+    }
+
     if (el.introDots) {
       Array.prototype.forEach.call(el.introDots.children, function (d, k) {
         d.classList.toggle('is-active', k === introIndex);
+        d.classList.toggle('is-done', k < introIndex);
         d.setAttribute('aria-selected', k === introIndex ? 'true' : 'false');
       });
     }
@@ -816,6 +925,8 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   function introShow() {
     if (!el.introView) return;
     introSlide(0);
+    introScale();
+    introDemo();
     el.introView.hidden = false;
     document.body.classList.add('is-intro');
     setTimeout(function () {
@@ -5749,7 +5860,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       el.introClose.addEventListener('click', introHide);
       el.introNext.addEventListener('click', function () { introSlide(introIndex + 1); });
       el.introSlides.addEventListener('click', function (e) {
-        if (e.target.closest('.intro-actions')) return;
+        if (e.target.closest('.intro-actions, .mock-track, .mock-chip')) return;
         introSlide(introIndex + 1);
       });
       el.introDots.addEventListener('click', function (e) {
@@ -7358,7 +7469,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'authTabLogin', 'authTabRegister', 'authForm', 'authEmailField', 'authEmail',
      'authNameField', 'authName', 'authPasswordField', 'authPassword',
      'authPassword2Field', 'authPassword2', 'authMsg', 'authSubmit', 'authForgot', 'authBack',
-     'introView', 'introClose', 'introSlides', 'introDots', 'introNext', 'introRegister', 'introLogin', 'introGuest',
+     'introView', 'introClose', 'introSlides', 'introDots', 'introNext', 'introRegister', 'introLogin', 'introGuest', 'introStep',
      'recentCard', 'recentName', 'recentMeta', 'recentGo',
 
      'sheetFav', 'sheetFavPc', 'sheetCommunity', 'reportBtns', 'reportStatus',

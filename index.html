@@ -441,6 +441,7 @@
 
       <div class="intro-slides" id="introSlides">
         <article class="intro-slide is-active">
+          <span class="intro-kicker"><b>01</b> Keresés</span>
           <span class="intro-art" aria-hidden="true">
             <span class="mock">
               <span class="mock-card">
@@ -458,53 +459,71 @@
               </span>
             </span>
           </span>
-          <h3>Találd meg a legközelebbi REpontot</h3>
+          <h3>Találd meg a legközelebbi <em>REpontot</em></h3>
           <p>Országos lefedettség, nyitvatartás és távolság egy pillantásra — a lista a helyzetedhez igazodik.</p>
+          <ul class="intro-points">
+            <li>80+ automata</li>
+            <li>Élő nyitvatartás</li>
+            <li>Távolság a helyzetedhez</li>
+          </ul>
         </article>
 
         <article class="intro-slide">
-          <span class="intro-art" aria-hidden="true">
+          <span class="intro-kicker"><b>02</b> Közösség</span>
+          <span class="intro-art">
             <span class="mock">
               <span class="mock-chips">
-                <span class="mock-chip is-on">Tele van</span>
-                <span class="mock-chip">Kiürült</span>
-                <span class="mock-chip">Nem fogadja</span>
+                <button class="mock-chip is-on" type="button" data-state="tele" aria-pressed="true">Tele van</button>
+                <button class="mock-chip" type="button" data-state="urult" aria-pressed="false">Kiürült</button>
+                <button class="mock-chip" type="button" data-state="hibas" aria-pressed="false">Nem fogadja</button>
               </span>
               <span class="mock-card">
                 <span class="mock-top is-warn"><i class="mock-dot"></i> Üzemállapot</span>
-                <b>Tele van · 12 perce</b>
-                <span class="mock-sub">Mindenkinek látszik a térképen</span>
+                <b data-mock-title>Tele van · 12 perce</b>
+                <span class="mock-sub" data-mock-sub>Mindenkinek látszik a térképen</span>
                 <span class="mock-row">
-                  <span class="mock-pill is-tired">2 óráig érvényes</span>
+                  <span class="mock-pill is-tired" data-mock-pill>2 óráig érvényes</span>
                   <span class="mock-dist">3 jelzés</span>
                 </span>
               </span>
             </span>
+            <span class="art-hint">Koppints egy állapotra</span>
           </span>
-          <h3>Lásd, nyitva van-e most</h3>
+          <h3>Lásd, <em>nyitva</em> van-e most</h3>
           <p>A közösség jelzi, ha tele van vagy nem fogadja a palackot. A jelzés 2 óráig érvényes, és mindenkinek látszik.</p>
+          <ul class="intro-points">
+            <li>2 órás jelzés</li>
+            <li>Mindenki látja</li>
+          </ul>
         </article>
 
         <article class="intro-slide">
-          <span class="intro-art" aria-hidden="true">
+          <span class="intro-kicker"><b>03</b> Értékelés</span>
+          <span class="intro-art">
             <span class="mock">
               <span class="mock-card">
                 <span class="mock-top"><i class="mock-dot"></i> Értékelés</span>
                 <span class="mock-scale"><b>8</b><span>/ 10</span></span>
-                <span class="mock-track"><span class="mock-knob"></span></span>
+                <span class="mock-track" role="slider" tabindex="0" aria-label="Értékelés" aria-valuemin="1" aria-valuemax="10" aria-valuenow="8"><span class="mock-knob"></span></span>
                 <span class="mock-chips mock-chips-start">
-                  <span class="mock-chip">Gyors</span>
-                  <span class="mock-chip">Tiszta</span>
-                  <span class="mock-chip">Kedves</span>
+                  <button class="mock-chip" type="button" aria-pressed="false">Gyors</button>
+                  <button class="mock-chip" type="button" aria-pressed="false">Tiszta</button>
+                  <button class="mock-chip" type="button" aria-pressed="false">Kedves</button>
                 </span>
               </span>
             </span>
+            <span class="art-hint">Húzd a csúszkát</span>
           </span>
-          <h3>Indulj el egy koppintással</h3>
-          <p>Autóval, kerékpárral vagy gyalog — valós távolság és idő, akár az appon belüli navigációval. Bajban ott az SOS.</p>
+          <h3>Értékelj <em>egy húzással</em></h3>
+          <p>Pontszám és címkék — a közösség értékelései alapján látod, melyik pont gyors, tiszta vagy épp zsúfolt.</p>
+          <ul class="intro-points">
+            <li>1–10 pont</li>
+            <li>Egy húzás</li>
+          </ul>
         </article>
 
         <article class="intro-slide">
+          <span class="intro-kicker"><b>04</b> Ranglista</span>
           <span class="intro-art" aria-hidden="true">
             <span class="mock">
               <span class="mock-list">
@@ -514,11 +533,16 @@
               </span>
             </span>
           </span>
-          <h3>Kövesd, ki a legjobb</h3>
+          <h3>Kövesd, ki a <em>legjobb</em></h3>
           <p>A ranglista a legjobbra értékelt gyűjtőhelyeket mutatja — a saját értékeléseidből épül fel.</p>
+          <ul class="intro-points">
+            <li>Top 10</li>
+            <li>Saját értékelésekből</li>
+          </ul>
         </article>
 
         <article class="intro-slide">
+          <span class="intro-kicker"><b>05</b> Navigáció</span>
           <span class="intro-art" aria-hidden="true">
             <span class="mock">
               <span class="mock-card">
@@ -532,17 +556,22 @@
               </span>
             </span>
           </span>
-          <h3>Indulj el egy koppintással</h3>
+          <h3>Indulj el <em>egy koppintással</em></h3>
           <p>Valós távolság és idő, appon belüli navigáció — bajban pedig ott az SOS a legközelebbi nyitott ponttal.</p>
+          <ul class="intro-points">
+            <li>Gyalog · autó</li>
+            <li>SOS mód</li>
+          </ul>
         </article>
 
         <article class="intro-slide intro-slide--cta">
+          <span class="intro-kicker"><b>06</b> Fiók</span>
           <span class="cta-art" aria-hidden="true">
             <span class="cta-orb">
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.6l4.2 4.2L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>
           </span>
-          <h3>Mentsd el a jelzéseidet</h3>
+          <h3>Mentsd el a <em>jelzéseidet</em></h3>
           <p>Egy fiókkal minden értékelésed és kedvenced megmarad — bármelyik eszközön, bármikor.</p>
 
           <div class="intro-actions">
@@ -557,6 +586,7 @@
       </div>
 
       <div class="intro-foot">
+        <span class="intro-count" id="introStep" aria-live="polite">1 / 6</span>
         <div class="intro-dots" id="introDots" role="tablist" aria-label="Bemutató lépései">
           <button class="intro-dot is-active" type="button" data-slide="0" role="tab" aria-selected="true" aria-label="1. lépés"></button>
           <button class="intro-dot" type="button" data-slide="1" role="tab" aria-selected="false" aria-label="2. lépés"></button>
