@@ -258,6 +258,115 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   function isMobile() { return window.innerWidth <= 900; }
 
+  /* --- PWA: service worker, offline jelzés, telepítés --- */
+
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+    navigator.serviceWorker.register('sw.js', { scope: './' }).then(function (reg) {
+      // új verzió érkezik: szólunk, és a következő indításnál élesedik
+      reg.addEventListener('updatefound', function () {
+        var sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', function () {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            toast('Új verzió érhető el – indítsd újra az appot');
+          }
+        });
+      });
+    }).catch(function () { });
+  }
+
+  /* --- web push (a VAPID kulcs beállítása után aktív) --- */
+
+  function pushKey() {
+    return (window.VISSZA_CONFIG && window.VISSZA_CONFIG.VAPID_PUBLIC) || '';
+  }
+
+  function pushAvailable() {
+    return !!pushKey() && 'serviceWorker' in navigator &&
+      'PushManager' in window && 'Notification' in window;
+  }
+
+  function urlB64ToUint8(base64) {
+    var pad = '='.repeat((4 - (base64.length % 4)) % 4);
+    var s = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+    var raw = atob(s);
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  function refreshPushState() {
+    if (!pushAvailable() || !('serviceWorker' in navigator)) { state.pushOn = false; return Promise.resolve(false); }
+    return navigator.serviceWorker.ready.then(function (reg) {
+      return reg.pushManager.getSubscription();
+    }).then(function (sub) {
+      var was = state.pushOn;
+      state.pushOn = !!sub;
+      if (was !== state.pushOn && overlayKind === 'settings') openOverlay('settings');
+      return state.pushOn;
+    }).catch(function () { state.pushOn = false; return false; });
+  }
+
+  function pushRowHtml() {
+    if (!pushAvailable()) return '';
+    return '<div class="set-row"><span class="set-main"><b>Push értesítés</b>' +
+      '<small>Admin üzenetek zárt appnál is megjönnek</small></span>' +
+      '<button class="set-toggle' + (state.pushOn ? ' is-on' : '') + '" type="button" ' +
+        'data-set="push" role="switch" aria-checked="' + (state.pushOn ? 'true' : 'false') + '"><i></i></button></div>';
+  }
+
+  async function togglePush() {
+    if (!pushAvailable()) { toast('Ez a böngésző nem támogatja a push értesítést'); return; }
+    if (!account.user) { toast('Jelentkezz be a push értesítéshez'); return; }
+
+    try {
+      var reg = await navigator.serviceWorker.ready;
+      var sub = await reg.pushManager.getSubscription();
+
+      if (sub) {
+        await sub.unsubscribe().catch(function () { });
+        try { await sb.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); } catch (e) { }
+        state.pushOn = false;
+        toast('Push kikapcsolva');
+        if (overlayKind === 'settings') openOverlay('settings');
+        return;
+      }
+
+      var perm = await Notification.requestPermission();
+      if (perm !== 'granted') { toast('Engedélyezd az értesítéseket a böngészőben'); return; }
+
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8(pushKey())
+      });
+
+      var j = sub.toJSON ? sub.toJSON() : { keys: {} };
+      var r = await sb.from('push_subscriptions').upsert({
+        endpoint: sub.endpoint,
+        user_id: account.user.id,
+        p256dh: (j.keys && j.keys.p256dh) || '',
+        auth: (j.keys && j.keys.auth) || '',
+        ua: navigator.userAgent.slice(0, 180),
+        last_seen: new Date().toISOString()
+      }, { onConflict: 'endpoint' });
+
+      if (r.error) { toast('Nem sikerült elmenteni a feliratkozást'); return; }
+      state.pushOn = true;
+      toast('Push értesítés bekapcsolva');
+      if (overlayKind === 'settings') openOverlay('settings');
+    } catch (e) {
+      toast('A push bekapcsolása nem sikerült');
+    }
+  }
+
+  function paintNet() {
+    var off = navigator.onLine === false;
+    if (el.offlineChip) el.offlineChip.hidden = !off;
+    document.body.classList.toggle('is-offline', off);
+  }
+
+
   function addrText(p) {
     var a = String(p.address || '');
     if (p.city && stripAcc(a).indexOf(stripAcc(p.city)) === -1) {
@@ -789,6 +898,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       loadAnnouncements();
       subscribeAnnouncements();
       checkAdmin();
+      refreshPushState();
       if (social.accountUser !== account.user.id) {
         social.accountUser = account.user.id;
         loadAccountSocial();
@@ -1648,6 +1758,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         return '<span class="fb-tag is-on">' + esc(tagLabel(t)) + ' ×' + tags[t] + '</span>';
       }).join('') + '</div>');
     }
+
+    // adatfrissítés: mi változott a legutóbbi adatletöltés óta
+    out.push(changesSectionHtml());
 
     // jelvények – csak a négy legfontosabb látszik
     var badgeList = badges.map(badgeHtml);
@@ -3900,10 +4013,16 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       '<div class="set-sec">Viselkedés</div>' +
       '<div class="set-row"><span class="set-main"><b>Értesítések</b><small>Rövid visszajelzés minden művelet után</small></span>' +
         '<button class="set-toggle' + (settings.toasts ? ' is-on' : '') + '" type="button" data-set="toasts" role="switch" aria-checked="' + (settings.toasts ? 'true' : 'false') + '"><i></i></button></div>' +
+      pushRowHtml() +
       '<div class="set-row"><span class="set-main"><b>Alap közlekedési mód</b><small>Ezzel indul az útvonal, ha nem választasz</small></span>' +
         '<span class="set-opts">' + modes.map(function (m) {
           return '<button class="set-opt' + (settings.mode === m[0] ? ' is-on' : '') + '" type="button" data-set="mode" data-v="' + m[0] + '">' + m[1] + '</button>';
         }).join('') + '</span></div>' +
+
+      (state.installEvt ?
+        '<div class="set-sec">Telepítés</div>' +
+        '<div class="set-row"><span class="set-main"><b>Telepítés a főképernyőre</b><small>Ikonként indul, offline is működik</small></span>' +
+          '<button class="btn btn-ghost btn-sm" type="button" data-set="install">Telepítés</button></div>' : '') +
 
       '<div class="set-sec">Adatok</div>' +
       '<div class="set-row"><span class="set-main"><b>Helyi adatok törlése</b><small>Kedvencek, listák, értékelések és előzmények ezen az eszközön</small></span>' +
@@ -4032,6 +4151,9 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       el.overlayEyebrow.textContent = 'Profil';
       el.overlayTitle.textContent = 'Profilom';
       el.overlayBody.innerHTML = profileHtml();
+      if (state.changes && state.changes.at) {
+        try { localStorage.setItem('vissza.changes.seen.v1', String(Date.parse(state.changes.at) || 0)); } catch (e) { }
+      }
       profileRefresh();   // megye-tábla / fióklátogatások betöltése után újrarajzolás
     }
 
@@ -4678,10 +4800,17 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   /* ==================== adat ==================== */
 
+  function loaderSay(text) {
+    var s = document.getElementById('loaderStatus');
+    if (s) s.textContent = text;
+  }
+
   async function loadData() {
     try {
+      loaderSay('Adatok betöltése…');
       var res = await fetch('data/repontok.json', { cache: 'no-cache' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
+      loaderSay('Pontok előkészítése…');
       var points = await res.json();
       state.points = points;
       state.byId.clear();
@@ -4690,11 +4819,13 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         state.byId.set(p.id, p);
       });
       ready.data = true;
+      loaderSay('Térkép és lista összeállítása…');
       renderRecent();
       refreshSocial();
       maybeHideLoader();
       applyFilters();
       loadMeta();
+      loadChanges();
       // a profil látogatás/kedvenc/sorozat szekciói pontok nélkül üresek maradnának
       if (overlayKind === 'profile') openOverlay('profile');
       var pos = positionFromHash();
@@ -4702,8 +4833,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       openPointFromHash();
       setTimeout(maybeIntro, 700);
     } catch (e) {
-      var p = el.loader.querySelector('p');
-      if (p) p.innerHTML = 'Nem sikerült betölteni az adatokat.<br>Generáld le: <b>node tools/fetch-data.mjs</b>';
+      loaderSay('Nem sikerült betölteni az adatokat – generáld le: node tools/fetch-data.mjs');
     }
   }
 
@@ -4724,6 +4854,47 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (id == null || !ready.data || !state.byId.has(id)) return;
     if (selectedId === id && el.sheet && !el.sheet.hidden) return;
     select(id, {});
+  }
+
+  async function loadChanges() {
+    try {
+      var res = await fetch('data/changes.json', { cache: 'no-cache' });
+      if (!res.ok) return;
+      var ch = await res.json();
+      if (!ch || !ch.counts) return;
+      state.changes = ch;
+      if (overlayKind === 'profile') openOverlay('profile');
+    } catch (e) { }
+  }
+
+  function changesSectionHtml() {
+    var ch = state.changes;
+    if (!ch || !ch.counts) return '';
+    if (!ch.counts.added && !ch.counts.removed && !ch.counts.moved && !ch.counts.hours) return '';
+    var seen = 0;
+    try { seen = +localStorage.getItem('vissza.changes.seen.v1') || 0; } catch (e) { }
+    var at = Date.parse(ch.at) || 0;
+    var fresh = at > seen;
+    var added = (ch.added || []).filter(function (id) { return state.byId.has(id); });
+
+    var inner = '<div class="chg-stats">' +
+      '<div><b>+' + added.length + '</b><span>új pont</span></div>' +
+      '<div><b>' + (ch.removed || []).length + '</b><span>megszűnt</span></div>' +
+      '<div><b>' + (ch.hours || []).length + '</b><span>nyitvatartás</span></div>' +
+    '</div>';
+
+    if (added.length) {
+      inner += added.slice(0, 3).map(function (id) {
+        var p = state.byId.get(id);
+        return '<div class="rank-row" data-id="' + id + '">' +
+          '<span class="p-ico" aria-hidden="true">✦</span>' +
+          '<span class="rank-main"><b>' + esc(p.name) + '</b>' +
+          '<small>' + esc(p.city || addrText(p)) + '</small></span>' +
+          '<span class="p-go" aria-hidden="true">›</span></div>';
+      }).join('');
+    }
+
+    return profSection('Adatfrissítés', inner, fmtWhen(at));
   }
 
   async function loadMeta() {
@@ -5039,6 +5210,24 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     el.locateBtn.addEventListener('click', function () { askLocation('locate'); });
 
     loadSettings();
+    registerServiceWorker();
+    paintNet();
+    window.addEventListener('online', paintNet);
+    window.addEventListener('offline', paintNet);
+
+    // indítóparancsok a PWA-gyorsparancsokból (?go=search|profile)
+    try {
+      var go = new URLSearchParams(location.search).get('go');
+      if (go === 'search') { setDock('dockSearch'); setSearchOpen(true); }
+      else if (go === 'profile') { openOverlay('profile'); setDock('dockProfile'); }
+    } catch (e) { }
+
+    // telepítés felajánlása
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      state.installEvt = e;
+      if (overlayKind === 'settings') openOverlay('settings');
+    });
 
     // nyilvános admin értesítések (bejelentkezés nélkül is látszanak)
     if (sb) { loadAnnouncements(); subscribeAnnouncements(); }
@@ -5401,6 +5590,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           toast('Értesítés elküldve');
           f.reset();
           loadAnnouncements();
+          // push kiküldése, ha a funkció telepítve van (best effort)
+          if (pushKey() && sb.functions) {
+            sb.functions.invoke('send-push', { body: { title: title, body: body } }).catch(function () { });
+          }
         })
         .catch(function () {
           if (btn) btn.disabled = false;
@@ -5432,6 +5625,15 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         saveSettings();
         openOverlay('settings');
         toast(settings.toasts ? 'Értesítések bekapcsolva' : 'Értesítések kikapcsolva');
+        return;
+      }
+      if (k === 'push') { togglePush(); return; }
+      if (k === 'install') {
+        if (state.installEvt && state.installEvt.prompt) {
+          state.installEvt.prompt();
+          state.installEvt = null;
+          setTimeout(function () { if (overlayKind === 'settings') openOverlay('settings'); }, 600);
+        }
         return;
       }
       if (k === 'notif-seen') {
@@ -7143,7 +7345,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
      'panelGrip', 'results', 'resultsLabel', 'resultsCount', 'qbar', 'qbarList', 'qbarGo',
      'filterToggle', 'filterCount', 'distRow', 'filterPop', 'filterClose', 'filterDone', 'filterReset', 'activeFilters',
      'listsRow', 'savePop', 'saveClose', 'saveLists', 'saveFavRow', 'saveNewForm', 'saveNewInput', 'sheetSave',
-     'listsBtn', 'listsPop', 'listsClose', 'listsEmpty', 'listsCount', 'recenterBtn', 'gpsChip', 'mapMenu', 'mapTip',
+     'listsBtn', 'listsPop', 'listsClose', 'listsEmpty', 'listsCount', 'recenterBtn', 'gpsChip', 'mapMenu', 'mapTip', 'offlineChip',
      'dock', 'dockTop', 'dockMap', 'dockProfile', 'dockSearch', 'dockFriends', 'dockFriendsDot',
      'sosBtn', 'sosView', 'sosClose', 'sosArrow', 'sosDist', 'sosBadge', 'sosName',
      'sosAddr', 'sosGo', 'sosNext', 'sosDetail', 'sosMoreList',

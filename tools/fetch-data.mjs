@@ -9,7 +9,8 @@
  * Forrás: https://map.mohu.hu/api/Map/  (MOHU MOL Hulladékgazdálkodási Zrt.)
  */
 
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, readFile } from "node:fs/promises";
+import { changesSummary } from "./diff.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -93,7 +94,33 @@ const out = points.map((p) => {
 
 await mkdir(OUT_DIR, { recursive: true });
 const file = join(OUT_DIR, "repontok.json");
+
+// előző állapot beolvasása a változás-követéshez (ha van)
+let prev = [];
+try {
+  prev = JSON.parse(await readFile(file, "utf8"));
+  if (!Array.isArray(prev)) prev = [];
+} catch (e) {
+  prev = [];
+}
+
 await writeFile(file, JSON.stringify(out), "utf8");
+
+// mi változott az előző futáshoz képest?
+if (prev.length) {
+  const changes = changesSummary(prev, out);
+  await writeFile(
+    join(OUT_DIR, "changes.json"),
+    JSON.stringify(changes, null, 1),
+    "utf8"
+  );
+  console.log(
+    `Változások: +${changes.counts.added} új, -${changes.counts.removed} megszűnt, ` +
+    `${changes.counts.moved} helyet változtatott, ${changes.counts.hours} új nyitvatartás`
+  );
+} else {
+  console.log("Nincs előző adat – a változás-követés a következő futástól indul.");
+}
 
 const stats = {
   updatedAt: new Date().toISOString(),

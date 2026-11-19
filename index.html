@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vissza! — a legközelebbi palackvisszaváltó automata</title>
 <meta name="description" content="Talád meg a hozzád legközelebbi MOHU REpont visszaváltó automatát vagy kézi pontot. Sötét térkép, útvonal, nyitvatartás, SOS mód, visszajelzés.">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#05070B">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/img/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vissza!">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='20' fill='%231B6D99'/%3E%3Cpath d='M27 11h10v5.5l4.5 7.5v23.5a4.5 4.5 0 0 1-4.5 4.5H27a4.5 4.5 0 0 1-4.5-4.5V24L27 16.5z' fill='%23041017'/%3E%3Crect x='26.5' y='33' width='11' height='9' rx='2.5' fill='%231B6D99'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,6 +25,9 @@
   <div id="map" aria-label="REpontok térképe"></div>
   <div class="map-scrim" aria-hidden="true"></div>
   <div class="map-tip" id="mapTip" hidden aria-hidden="true"></div>
+  <div class="offline-chip" id="offlineChip" hidden role="status" aria-live="polite">
+    <span class="oc-dot" aria-hidden="true"></span>Offline – mentett adatok
+  </div>
 
   <!-- ================= Fejléc ================= -->
   <header class="topbar">
@@ -614,10 +623,35 @@
   </div>
 
   <!-- Betöltés -->
-  <div class="loader" id="loader">
-    <div class="loader-logo">Vissza<b>!</b></div>
-    <div class="loader-bar"><i></i></div>
-    <p>REpontok betöltése…</p>
+  <div class="loader" id="loader" role="status" aria-live="polite" aria-label="Betöltés">
+    <div class="ld-glow" aria-hidden="true"></div>
+
+    <div class="ld-wrap">
+      <div class="ld-mark" aria-hidden="true">
+        <span class="ld-ring"></span>
+        <svg viewBox="0 0 64 64" width="46" height="46">
+          <defs>
+            <linearGradient id="ldg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#7FC9EC"/><stop offset=".55" stop-color="#1B6D99"/><stop offset="1" stop-color="#2C86B8"/>
+            </linearGradient>
+          </defs>
+          <path d="M27 8h10v5.5l4.5 7.5v24a4.5 4.5 0 0 1-4.5 4.5H27a4.5 4.5 0 0 1-4.5-4.5V21l4.5-7.5z" fill="url(#ldg)"/>
+          <rect x="26.5" y="30" width="11" height="9" rx="2.5" fill="#05070B"/>
+        </svg>
+      </div>
+
+      <div class="ld-title">Vissza<span>!</span></div>
+      <div class="ld-sub">REpont visszaváltó kereső</div>
+
+      <div class="ld-track"><i></i></div>
+
+      <div class="ld-status">
+        <span class="ld-pulse" aria-hidden="true"></span>
+        <span id="loaderStatus">Adatok betöltése…</span>
+      </div>
+    </div>
+
+    <div class="ld-foot">MOHU REpontok · térkép · nyitvatartás</div>
   </div>
 <!-- ================= Részletek (bottom sheet) ================= -->
 <div class="sheet-scrim" id="sheetScrim" hidden></div>

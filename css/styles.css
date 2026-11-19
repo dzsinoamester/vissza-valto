@@ -8681,3 +8681,279 @@ html[data-theme="deep"] .map-vignette { background: radial-gradient(120% 90% at 
 
 /* hosszú értesítés-szöveg ne törje a sort */
 .notif-main { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ===================== v34: PWA – offline jelzés ===================== */
+
+.offline-chip {
+  position: fixed;
+  left: 50%;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  transform: translateX(-50%);
+  z-index: 940;
+  display: none;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: linear-gradient(180deg, rgba(40, 46, 54, .82), rgba(16, 21, 28, .9));
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: var(--e2);
+  color: rgba(255, 255, 255, .82);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  animation: ocIn .2s cubic-bezier(.2, .8, .3, 1) both;
+  pointer-events: none;
+}
+@keyframes ocIn { from { opacity: 0; transform: translate(-50%, -6px); } }
+.oc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 8px rgba(255, 149, 64, .7);
+}
+body.is-offline .offline-chip { display: inline-flex; }
+
+/* ===================== v35: adatfrissítés szekció ===================== */
+
+.chg-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 2px 0 8px;
+}
+.chg-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .03);
+}
+.chg-stats b { font-family: var(--display); font-size: 15px; letter-spacing: -.4px; }
+.chg-stats > div:first-child b { color: #2BD97C; }
+.chg-stats > div:nth-child(2) b { color: rgba(255, 255, 255, .55); }
+.chg-stats span { font-size: 10.5px; letter-spacing: .04em; color: var(--ink-3); text-transform: uppercase; }
+
+/* ===================== v36: modern betöltő képernyő ===================== */
+
+.loader {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(900px 520px at 50% 34%, rgba(27, 109, 153, .16), transparent 68%),
+    radial-gradient(600px 400px at 50% 100%, rgba(43, 217, 124, .05), transparent 70%),
+    #05070B;
+  overflow: hidden;
+  transition: opacity .45s ease;
+}
+.loader.is-done { opacity: 0; pointer-events: none; }
+
+/* finom szemcse, hogy ne legyen „lapos” a sötét */
+.loader::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .12;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+.ld-glow {
+  position: absolute;
+  width: 620px;
+  height: 620px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(27, 109, 153, .35), rgba(27, 109, 153, 0) 62%);
+  filter: blur(18px);
+  animation: ldBreathe 5.5s ease-in-out infinite;
+}
+@keyframes ldBreathe {
+  0%, 100% { transform: scale(.92); opacity: .55; }
+  50% { transform: scale(1.06); opacity: .95; }
+}
+
+.ld-wrap {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px;
+  text-align: center;
+  animation: ldIn .5s cubic-bezier(.2, .8, .3, 1) both;
+}
+@keyframes ldIn { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+
+/* jelvény: üvegkártya lassan forgó fénygyűrűvel */
+.ld-mark {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 26px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(160deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .02));
+  border: 1px solid rgba(255, 255, 255, .14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    0 24px 50px -26px rgba(0, 0, 0, .9),
+    0 0 40px -12px rgba(27, 109, 153, .5);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  margin-bottom: 6px;
+}
+.ld-mark svg { filter: drop-shadow(0 0 14px rgba(27, 109, 153, .5)); }
+
+.ld-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 28px;
+  padding: 1px;
+  background: conic-gradient(from 0deg, rgba(27, 109, 153, 0) 0deg,
+    rgba(127, 201, 236, .85) 60deg, rgba(27, 109, 153, 0) 140deg,
+    rgba(43, 217, 124, .5) 240deg, rgba(27, 109, 153, 0) 330deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: ldSpin 3.4s linear infinite;
+}
+@keyframes ldSpin { to { transform: rotate(1turn); } }
+
+.ld-title {
+  font-family: var(--display);
+  font-size: 46px;
+  font-weight: 700;
+  letter-spacing: -2.4px;
+  color: #F4F6F8;
+  line-height: 1;
+}
+.ld-title span {
+  color: var(--accent-light, #7FC9EC);
+  text-shadow: 0 0 30px rgba(27, 109, 153, .9);
+  display: inline-block;
+  animation: ldTick 1.6s ease-in-out infinite;
+}
+@keyframes ldTick { 0%, 70%, 100% { transform: translateY(0); } 78% { transform: translateY(-4px); } }
+
+.ld-sub {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .38);
+  margin-bottom: 14px;
+}
+
+/* vékony töltősáv, fénnyel */
+.ld-track {
+  position: relative;
+  width: min(260px, 62vw);
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .09);
+  overflow: hidden;
+}
+.ld-track i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(27, 109, 153, .55), #7FC9EC 55%, #2BD97C);
+  box-shadow: 0 0 12px rgba(27, 109, 153, .9);
+  animation: ldGrow 2.6s cubic-bezier(.25, .9, .3, 1) forwards;
+}
+@keyframes ldGrow { 0% { width: 4%; } 55% { width: 62%; } 100% { width: 88%; } }
+.ld-track i::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
+  animation: ldSweep 1.5s ease-in-out infinite;
+}
+@keyframes ldSweep { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
+.loader.is-done .ld-track i { width: 100%; transition: width .3s ease; animation: none; }
+
+.ld-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .01em;
+  color: rgba(255, 255, 255, .52);
+}
+.ld-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-light, #7FC9EC);
+  box-shadow: 0 0 10px rgba(127, 201, 236, .9);
+  animation: ldPulse 1.4s ease-in-out infinite;
+}
+@keyframes ldPulse { 0%, 100% { opacity: .35; transform: scale(.85); } 50% { opacity: 1; transform: scale(1.15); } }
+
+.ld-foot {
+  position: absolute;
+  z-index: 2;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .24);
+}
+
+@media (max-width: 480px) {
+  .ld-mark { width: 78px; height: 78px; border-radius: 22px; }
+  .ld-mark svg { width: 40px; height: 40px; }
+  .ld-title { font-size: 38px; letter-spacing: -2px; }
+}
+
+/* betöltő finomítás: nagyobb jelvény-ikon, erősebb fénygyűrű */
+.ld-mark svg { width: 52px; height: 52px; }
+.ld-ring {
+  inset: -1px;
+  background: conic-gradient(from 0deg,
+    rgba(27, 109, 153, 0) 0deg,
+    rgba(127, 201, 236, .95) 55deg,
+    rgba(43, 217, 124, .55) 120deg,
+    rgba(27, 109, 153, 0) 190deg,
+    rgba(127, 201, 236, .5) 290deg,
+    rgba(27, 109, 153, 0) 360deg);
+}
+@media (max-width: 480px) {
+  .ld-mark svg { width: 44px; height: 44px; }
+}
+
+/* fénygyűrű helyett tiszta, lüktető halo (a conic él-csíkok eltűntek) */
+.ld-ring { display: none; }
+.ld-mark {
+  animation: ldHalo 3.6s ease-in-out infinite;
+}
+@keyframes ldHalo {
+  0%, 100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .22),
+      0 24px 50px -26px rgba(0, 0, 0, .9),
+      0 0 34px -14px rgba(27, 109, 153, .55);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .28),
+      0 24px 50px -26px rgba(0, 0, 0, .9),
+      0 0 56px -10px rgba(43, 150, 200, .8);
+  }
+}
