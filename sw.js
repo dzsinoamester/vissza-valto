@@ -62,11 +62,6 @@ self.addEventListener('message', function (event) {
   if (msg.type === 'VERSION') {
     event.source && event.source.postMessage({ type: 'VERSION', version: VERSION });
   }
-  if (msg.type === 'CLEAR_SAVED_TILES') {
-    event.waitUntil(caches.delete(SAVED_TILE_CACHE).then(function () {
-      event.source && event.source.postMessage({ type: 'SAVED_TILES_CLEARED' });
-    }));
-  }
 });
 
 function isTile(url) {

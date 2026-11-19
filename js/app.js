@@ -1435,11 +1435,17 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       .then(function (r) {
         if (r.error) throw r.error;
         if (noteEl) noteEl.value = '';
+        // helyben azonnal jelezzük – nincs szükség a teljes szociális kör újratöltésére
+        var at = Date.now();
+        var it = social.issues[id];
+        if (!it) it = social.issues[id] = { count: 0, at: at, mine: {} };
+        it.at = at;
+        if (!it.mine[kind]) it.count++;
+        it.mine[kind] = true;
+        applyFilters();
+        refreshSheetIssues();
         toast('Köszönjük! Megnézzük a pontot.');
-        return refreshSocial();
-      })
-      .then(function () {
-        if (state.isAdmin) return loadAdminIssues();
+        if (state.isAdmin) loadAdminIssues();
       })
       .catch(function (e) { toast('A jelzés nem sikerült: ' + authErr(e)); });
   }
@@ -1473,6 +1479,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           if (!social.issues[pointId].count) delete social.issues[pointId];
         }
         applyFilters();
+        refreshSheetIssues();
         toast('Jelzés lezárva');
         openOverlay('settings');
       })
@@ -4300,12 +4307,13 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           '<button class="btn btn-ghost btn-sm" type="button" data-set="save-map">' + (s ? 'Újra' : 'Mentés') + '</button>' +
           (s ? '<button class="btn btn-ghost btn-sm" type="button" data-set="clear-map">Törlés</button>' : '') +
         '</span></div>' +
-      '<div class="set-note">A jelenlegi nézet környékét menti el a böngésző (kb. 8–15-ös nagyítás). ' +
+      '<div class="set-note">A jelenlegi nézet környékét menti el a böngésző (kb. 8–14-es nagyítás). ' +
         'Nagy területnél ez eltarthat pár másodpercig.</div>';
   }
 
   async function saveMapArea() {
-    if (!map || savingMap) { if (!map) toast('Előbb nyisd meg a térképet'); return; }
+    if (savingMap) return;
+    if (!map || !map.isStyleLoaded()) { toast('Előbb nyisd meg a térképet'); return; }
     savingMap = true;
     toast('Térkép mentése…');
     try {
@@ -4338,6 +4346,15 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
           });
         }));
       }
+
+      // a korábbi terület csempéi csak sikeres mentés után tűnnek el
+      if (!done) { toast('Nem sikerült csempét menteni – nincs internet?'); return; }
+      var keep = {};
+      urls.forEach(function (u) { keep[u] = true; });
+      var old = await cache.keys();
+      await Promise.all(old.map(function (req) {
+        if (!keep[req.url]) return cache.delete(req);
+      }));
 
       var c = map.getCenter(), best = null, bd = Infinity;
       state.points.forEach(function (p) {
@@ -5241,6 +5258,14 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     } catch (e) { return null; }
   }
 
+  /* helyi másolat: előbb IndexedDB (ez a legfrissebb), aztán a service worker
+     cache-e – így a betöltésnek egyetlen tartalék-sorrendje van. */
+  async function readLocalPoints() {
+    var points = await idbGet('points');
+    if (Array.isArray(points) && points.length) return points;
+    return readCachedPoints();
+  }
+
   async function readCachedPoints() {
     if (!('caches' in window)) return null;
     try {
@@ -5303,6 +5328,17 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
     // 1) kis meta kérése: ebből tudjuk, változott-e egyáltalán az adat
     var meta = await fetchMeta();
+
+    // ugyanaz az adat, mint ami már a képernyőn van: nincs újrarenderelés,
+    // és a helyi másolatot sem kell kiolvasni
+    if (ready.data && meta && DATA_AT && meta.updatedAt === DATA_AT) {
+      state.offlineData = false;
+      paintNet();
+      hideLoaderOffline();
+      maybeHideLoader();
+      return;
+    }
+
     var points = null;
     var fromCache = false;
 
@@ -5327,8 +5363,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
         if (meta) idbSet('meta', meta);
       } catch (e) {
         loaderSay('Mentett adatok keresése…');
-        points = await readCachedPoints();
-        if (!points) points = await idbGet('points');
+        points = await readLocalPoints();
         fromCache = !!points;
         meta = null;
       }
@@ -5338,15 +5373,6 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       // ha már van betöltött adat, ne borítsuk rá a betöltőt a működő felületre
       if (ready.data) { toast('Nincs internet – a mentett adatok maradtak'); return; }
       showLoaderOffline();
-      return;
-    }
-
-    // 3) ugyanaz az adat, mint ami már a képernyőn van: nincs újrarenderelés
-    if (ready.data && meta && DATA_AT && meta.updatedAt === DATA_AT) {
-      state.offlineData = false;
-      paintNet();
-      hideLoaderOffline();
-      maybeHideLoader();
       return;
     }
 
@@ -7060,11 +7086,18 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       (ICONS[name] || '') + '</svg>';
   }
 
+  /* a lista-előnézet is tartsa tiszteletben a tiltást, ne csak a nyitott beszélgetés */
+  function convPreview(c) {
+    if (!c || !c.last) return 'Még nincs üzenet';
+    if (soc.blocks[c.last.sender]) return 'rejtett üzenet (tiltott felhasználó)';
+    var prefix = c.last.sender && !(account.user && c.last.sender === account.user.id)
+      ? nameOf(c.last.sender) + ': ' : '';
+    return prefix + c.last.body;
+  }
+
   function convRowHtml(c) {
     var title = convTitle(c);
-    var sub = c.last
-      ? (c.last.sender && !(account.user && c.last.sender === account.user.id) ? nameOf(c.last.sender) + ': ' : '') + c.last.body
-      : 'Még nincs üzenet';
+    var sub = convPreview(c);
     return '<div class="fr-row' + (c.unread ? ' is-unread' : '') + '" data-fr="open" data-conv="' + esc(c.id) + '">' +
       '<span class="fr-av" aria-hidden="true">' + icon(c.kind === 'group' ? 'users' : 'chat', 16) + '</span>' +
       '<span class="rank-main"><b>' + esc(title) + '</b><small>' + esc(String(sub).slice(0, 70)) + '</small></span>' +
@@ -7146,6 +7179,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   function convSub(c) {
     if (!c || !c.last) return 'még nincs üzenet';
+    if (soc.blocks[c.last.sender]) return 'rejtett üzenet (tiltott felhasználó)';
     var mine = account.user && c.last.sender === account.user.id;
     return (mine ? 'Te: ' : '') + String(c.last.body || '').slice(0, 60);
   }
