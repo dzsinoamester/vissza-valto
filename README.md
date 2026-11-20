@@ -1,8 +1,7 @@
 # REpontCheck
 
 A MOHU **REpont** visszaváltópontjainak keresője – térképen, magyarul, a MOHU arculatával.
-A [Budicheck](https://budicheck.app)-hoz hasonló felépítés: bal oldali kereső + lista,
-nagy térkép jelölőkkel, és egy **SOS** mód, ami a legközelebbi *nyitott* ponthoz navigál.
+Bal oldali kereső + lista, nagy térkép jelölőkkel, és egy **SOS** mód, ami a legközelebbi *nyitott* ponthoz navigál.
 
 ## Futtatás
 
