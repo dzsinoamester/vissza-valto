@@ -4446,28 +4446,52 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     try { return +(localStorage.getItem(NOTIF_KEY) || 0); } catch (e) { return 0; }
   }
 
+  /* iOS-szerű push értesítés fejléc: appnév + ikon + idő */
+  var NOTIF_META = {
+    ann:  { app: 'Vissza!',   icon: 'bell' },
+    poke: { app: 'Bökés',     icon: 'bottle' },
+    freq: { app: 'Barátok',   icon: 'users' },
+    msg:  { app: 'Üzenetek',  icon: 'chat' }
+  };
+
   function notifItems() {
     var out = [];
     annForMe().forEach(function (a) {
       out.push({
         key: 'ann' + a.id,
         at: Date.parse(a.created_at) || 0,
-        text: a.title + ' – ' + a.body,
-        kind: 'ann'
+        kind: 'ann',
+        app: 'Vissza!',
+        title: a.title,
+        body: a.body,
+        text: a.title + ' – ' + a.body
       });
     });
     (soc.pokes || []).forEach(function (p) {
-      out.push({ key: 'poke' + p.id, at: p.at || 0, text: nameOf(p.from_id) + ' megbökött' });
+      out.push({
+        key: 'poke' + p.id, at: p.at || 0, kind: 'poke',
+        app: 'Bökés', title: nameOf(p.from_id) + ' megbökött',
+        body: 'Nyisd meg a profilt a visszabökéshez.',
+        text: nameOf(p.from_id) + ' megbökött'
+      });
     });
     (soc.requests || []).forEach(function (q) {
       if (q.dir !== 'in') return;
-      out.push({ key: 'freq' + q.id, at: q.at || 0, text: nameOf(q.id) + ' barátkérelmet küldött' });
+      out.push({
+        key: 'freq' + q.id, at: q.at || 0, kind: 'freq',
+        app: 'Barátok', title: nameOf(q.id),
+        body: 'barátkérelmet küldött neked',
+        text: nameOf(q.id) + ' barátkérelmet küldött'
+      });
     });
     (soc.convs || []).forEach(function (c) {
       if (!c.unread) return;
       out.push({
         key: 'msg' + c.id + c.unread,
         at: (c.last && (c.last.at || c.last.created_at)) || 0,
+        kind: 'msg',
+        app: 'Üzenetek', title: convTitle(c),
+        body: c.unread + ' olvasatlan üzenet',
         text: convTitle(c) + ' – ' + c.unread + ' olvasatlan üzenet'
       });
     });
@@ -4483,10 +4507,19 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     }
     return '<div class="notif-list">' + items.map(function (it) {
       var fresh = (it.at || 0) > seen;
-      return '<button class="notif-row' + (fresh ? ' is-new' : '') + '" type="button" data-notif="' + esc(it.key) + '">' +
-        '<span class="notif-dot" aria-hidden="true"></span>' +
-        '<span class="notif-main">' + esc(it.text) + '</span>' +
-        '<span class="notif-ago">' + (it.at ? agoText(it.at) : '') + '</span></button>';
+      var meta = NOTIF_META[it.kind] || NOTIF_META.ann;
+      return '<button class="notif-card' + (fresh ? ' is-new' : '') + '" type="button" data-notif="' + esc(it.key) + '">' +
+        '<span class="notif-ico" data-kind="' + esc(it.kind) + '" aria-hidden="true">' + icon(meta.icon, 18) + '</span>' +
+        '<span class="notif-content">' +
+          '<span class="notif-top">' +
+            (fresh ? '<i class="notif-unread" aria-hidden="true"></i>' : '') +
+            '<span class="notif-app">' + esc(it.app || meta.app) + '</span>' +
+            '<span class="notif-ago">' + (it.at ? agoText(it.at) : '') + '</span>' +
+          '</span>' +
+          '<span class="notif-title">' + esc(it.title || it.text) + '</span>' +
+          (it.body ? '<span class="notif-text">' + esc(it.body) + '</span>' : '') +
+        '</span>' +
+      '</button>';
     }).join('') + '</div>' +
       '<div class="notif-foot"><button class="btn btn-ghost btn-sm" type="button" data-set="notif-seen">Mind olvasottnak</button></div>';
   }
@@ -6165,6 +6198,12 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
       if (mb) {
         profOpen[mb.dataset.more] = !profOpen[mb.dataset.more];
         openOverlay('profile');
+        return;
+      }
+      var nt = e.target.closest('[data-notif]');
+      if (nt) {
+        // koppintás = olvasott (iOS: a push-ra koppintva eltűnik a jelzés)
+        openOverlay('notif');
         return;
       }
       var st = e.target.closest('[data-set]');

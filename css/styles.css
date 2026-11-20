@@ -8302,7 +8302,7 @@ mark.hit { background: transparent; color: var(--accent); font-weight: 700; }
 .af:focus-visible,
 .set-opt:focus-visible,
 .mm-item:focus-visible,
-.notif-row:focus-visible {
+.notif-card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -8341,27 +8341,102 @@ mark.hit { background: transparent; color: var(--accent); font-weight: 700; }
 }
 .overlay-head h3 { margin: 2px 0 0; }
 
-/* --- 3) értesítések --- */
-.notif-list { display: flex; flex-direction: column; gap: 6px; }
-.notif-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 11px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, .03);
+/* --- 3) értesítések: iOS-szerű push kártyák --- */
+.notif-list { display: flex; flex-direction: column; gap: 10px; }
+
+.notif-card {
+  position: relative;
+  display: flex; align-items: flex-start; gap: 12px;
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, .10);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .11), rgba(255, 255, 255, .055));
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  box-shadow:
+    0 14px 30px -18px rgba(0, 0, 0, .9),
+    inset 0 1px 0 rgba(255, 255, 255, .16);
   color: var(--ink); font: inherit; text-align: left; cursor: pointer;
-  transition: background .16s ease, border-color .16s ease;
+  transition: transform .18s cubic-bezier(.2, .8, .3, 1),
+              background .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
-.notif-row:hover { background: rgba(255, 255, 255, .07); border-color: var(--line-2); }
-.notif-dot {
-  flex: none; width: 7px; height: 7px; border-radius: 50%;
-  background: rgba(255, 255, 255, .18);
+.notif-card:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .15), rgba(255, 255, 255, .08));
+  border-color: rgba(255, 255, 255, .18);
 }
-.notif-row.is-new { border-color: rgba(27, 109, 153, .45); background: rgba(27, 109, 153, .12); }
-.notif-row.is-new .notif-dot { background: var(--accent); box-shadow: 0 0 10px rgba(27, 109, 153, .8); }
-.notif-main { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; }
-.notif-ago { flex: none; font-size: 11px; color: var(--ink-3); }
-.notif-foot { display: flex; justify-content: flex-end; margin-top: 12px; }
+.notif-card:active { transform: scale(.985); }
+.notif-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* app-ikon: lekerekített négyzet, színes gradiens */
+.notif-ico {
+  flex: none;
+  display: grid; place-items: center;
+  width: 38px; height: 38px;
+  margin-top: 1px;
+  border-radius: 11px;
+  color: #fff;
+  background: linear-gradient(160deg, #3D9BC9, var(--accent) 65%, #124B68);
+  box-shadow: 0 6px 14px -7px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+.notif-ico[data-kind="poke"] { background: linear-gradient(160deg, #FFB35C, #F07C1F 70%, #A8500C); }
+.notif-ico[data-kind="freq"] { background: linear-gradient(160deg, #63D69B, #22A46A 70%, #106643); }
+.notif-ico[data-kind="msg"]  { background: linear-gradient(160deg, #7CD0FF, #2E8BE6 70%, #17548F); }
+
+.notif-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+/* fejléc: olvasatlan pötty + appnév + idő */
+.notif-top { display: flex; align-items: center; gap: 7px; }
+.notif-unread {
+  flex: none;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #3D9BC9;
+  box-shadow: 0 0 8px rgba(61, 155, 201, .9);
+}
+.notif-app {
+  flex: 1; min-width: 0;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .07em; text-transform: uppercase;
+  color: rgba(255, 255, 255, .62);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.notif-ago { flex: none; font-size: 11px; color: rgba(255, 255, 255, .45); }
+
+.notif-title {
+  font-size: 14px; font-weight: 700; line-height: 1.3;
+  letter-spacing: -.15px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.notif-text {
+  font-size: 13px; line-height: 1.4; color: rgba(255, 255, 255, .72);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notif-card.is-new {
+  border-color: rgba(61, 155, 201, .38);
+  background: linear-gradient(180deg, rgba(61, 155, 201, .20), rgba(61, 155, 201, .07));
+}
+.notif-card.is-new:hover { background: linear-gradient(180deg, rgba(61, 155, 201, .26), rgba(61, 155, 201, .11)); }
+
+/* belépő animáció */
+@keyframes notifIn {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+.notif-card { animation: notifIn .34s cubic-bezier(.2, .9, .3, 1) both; }
+.notif-card:nth-child(1) { animation-delay: .02s; }
+.notif-card:nth-child(2) { animation-delay: .07s; }
+.notif-card:nth-child(3) { animation-delay: .12s; }
+.notif-card:nth-child(4) { animation-delay: .17s; }
+.notif-card:nth-child(n+5) { animation-delay: .2s; }
+
+.notif-foot { display: flex; justify-content: flex-end; margin-top: 14px; }
 
 /* profil belépők */
 .profile-links { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
@@ -8680,7 +8755,7 @@ html[data-theme="deep"] .map-vignette { background: radial-gradient(120% 90% at 
 .ann-form .ann-row .btn { flex: none; }
 
 /* hosszú értesítés-szöveg ne törje a sort */
-.notif-main { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notif-title, .notif-text { word-break: break-word; }
 
 /* ===================== v34: PWA – offline jelzés ===================== */
 
