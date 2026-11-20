@@ -17,14 +17,27 @@ const TYPES = {
   '.ico': 'image/x-icon'
 };
 
+/* /app → /app/index.html, / → /index.html (mint az éles statikus hoszting) */
+function candidates(path) {
+  if (path.endsWith('/')) return [path + 'index.html'];
+  return [path, path + '/index.html'];
+}
+
 createServer(async (req, res) => {
   try {
-    let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    if (path === '/') path = '/index.html';
-    const file = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ''));
-    const body = await readFile(file);
+    const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    const safe = normalize(path).replace(/^(\.\.[/\\])+/, '');
+    let body = null;
+    for (const candidate of candidates(safe)) {
+      try {
+        body = await readFile(join(ROOT, candidate));
+        var ext = extname(candidate).toLowerCase();
+        break;
+      } catch { /* próbáljuk a következőt */ }
+    }
+    if (body === null) throw new Error('not found');
     res.writeHead(200, {
-      'Content-Type': TYPES[extname(file).toLowerCase()] || 'application/octet-stream',
+      'Content-Type': TYPES[ext] || 'application/octet-stream',
       'Cache-Control': 'no-store'
     });
     res.end(body);

@@ -13,6 +13,9 @@ cd repontcheck
 node tools/serve.mjs          # -> http://localhost:8080
 ```
 
+A gyökér (`/`) a landing oldal, maga az alkalmazás a **`/app`** alatt van
+(`http://localhost:8080/app/`).
+
 Bármilyen más statikus szerver is megteszi (`npx serve`, `python -m http.server`, vagy
 egyszerűen megnyitva `index.html`-t fájl:// alól – de az adatbetöltéshez HTTP szerver kell).
 
@@ -165,9 +168,12 @@ A `data/supabase-friends.sql` futtatása után (a schema + extra + social UTÁN)
 ## Fájlok
 
 ```
-index.html            a felület váza
+index.html            landing oldal (bemutató, CTA-k)
+app/index.html        a felület váza – /app alatt érhető el
+css/landing.css       a landing oldal stílusai
 css/styles.css        MOHU arculat (mohu.hu hivatalos CSS-ből kinyert színekkel)
 js/app.js             minden viselkedés: térkép, keresés, szűrők, SOS, részletek
+                      (az adat- és sw-útvonalakat a VISSZA_BASE előtaggal kéri)
 data/repontok.json    a letöltött pontok
 data/zip-megye.json   irányítószám -> megye (a profil megye-jelvényéhez)
 data/supabase-schema.sql  profiles + ratings tábla, RLS

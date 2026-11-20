@@ -2,7 +2,7 @@
    Cél: az app és a pont-adatok offline is betöltsenek, a térképcsempék
    pedig a már megnézett területekről maradjanak meg. */
 
-var VERSION = 'v3';
+var VERSION = 'v5';
 var SHELL_CACHE = 'vissza-shell-' + VERSION;
 var DATA_CACHE = 'vissza-data-' + VERSION;
 var TILE_CACHE = 'vissza-tiles';
@@ -14,8 +14,12 @@ var TILE_LIMIT = 450;
 var SHELL_ASSETS = [
   './',
   './index.html',
+  './app/',
+  './app/index.html',
+  './css/landing.css',
   './css/styles.css',
   './js/app.js',
+  './js/landing.js',
   './manifest.webmanifest',
   './assets/img/icon-192.png',
   './assets/img/icon-512.png',
@@ -166,12 +170,16 @@ self.addEventListener('fetch', function (event) {
         var res = await fetch(request);
         if (res && res.ok) {
           var cache = await caches.open(SHELL_CACHE);
-          cache.put('./index.html', res.clone());
+          cache.put(request, res.clone());
         }
         return res;
       } catch (e) {
         var cache2 = await caches.open(SHELL_CACHE);
-        var page = await cache2.match('./index.html') || await cache2.match('./');
+        // az /app alatt az app shellje, minden más alatt a landing oldal
+        var appPath = url.pathname.replace(/\/+$/, '').slice(-4) === '/app';
+        var page = await cache2.match(request) ||
+          (appPath ? await cache2.match('./app/index.html') : null) ||
+          await cache2.match('./index.html') || await cache2.match('./');
         if (page) {
           var headers = new Headers(page.headers);
           headers.set('x-vissza-offline', '1');
@@ -218,7 +226,7 @@ self.addEventListener('push', function (event) {
     badge: './assets/img/icon-192.png',
     lang: 'hu',
     tag: data.tag || 'vissza-ann',
-    data: { url: data.url || './' }
+    data: { url: data.url || './app/' }
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -226,7 +234,7 @@ self.addEventListener('push', function (event) {
 
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
-  var target = (event.notification.data && event.notification.data.url) || './';
+  var target = (event.notification.data && event.notification.data.url) || './app/';
 
   event.waitUntil((async function () {
     var all = await clients.matchAll({ type: 'window', includeUncontrolled: true });

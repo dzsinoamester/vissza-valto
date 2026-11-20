@@ -18,8 +18,10 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   // Az OSRM nyilvános demója csak autós profilt számol (a kerékpár/gyalog kérésre is
   // autós időt ad), ezért bringához és gyalogláshoz Valhallát használunk.
   var VALHALLA = 'https://valhalla1.openstreetmap.de/route';
+  // Az app a /app/ alatt fut, a közös fájlok (adat, sw) a gyökérben vannak.
+  var BASE = (typeof window !== 'undefined' && typeof window.VISSZA_BASE === 'string') ? window.VISSZA_BASE : './';
   // saját stílus (map/style.json) – ha nem töltődik be, a nyilvános dark stílusra esünk vissza
-  var MAP_STYLE = 'map/style.json';
+  var MAP_STYLE = BASE + 'map/style.json';
   var MAP_STYLE_FALLBACK = 'https://tiles.openfreemap.org/styles/dark';
 
   var EMPTY_FC = { type: 'FeatureCollection', features: [] };
@@ -263,7 +265,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-    navigator.serviceWorker.register('sw.js', { scope: './' }).then(function (reg) {
+    navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE }).then(function (reg) {
       // új verzió érkezik: szólunk, és a következő indításnál élesedik
       reg.addEventListener('updatefound', function () {
         var sw = reg.installing;
@@ -1802,7 +1804,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
   function loadZipCounty() {
     if (ZIP_COUNTY || zipTried) return Promise.resolve(ZIP_COUNTY);
     zipTried = true;
-    return fetch('data/zip-megye.json', { cache: 'force-cache' })
+    return fetch(BASE + 'data/zip-megye.json', { cache: 'force-cache' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) { if (j && typeof j === 'object') ZIP_COUNTY = j; return ZIP_COUNTY; })
       .catch(function () { return null; });
@@ -5186,7 +5188,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   /* ==================== adat ==================== */
 
-  var DATA_URL = 'data/repontok.json';
+  var DATA_URL = BASE + 'data/repontok.json';
   // Az oldal saját mentése: akkor is működik, ha a service worker épp nem irányít
   // (iOS-en ez elfordul), és a sw.js activate nem törli.
   var PAGE_CACHE = 'vissza-offline';
@@ -5196,7 +5198,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
     if (s) s.textContent = text;
   }
 
-  var DATA_META_URL = 'data/repontok-meta.json';
+  var DATA_META_URL = BASE + 'data/repontok-meta.json';
   var IDB_NAME = 'vissza-db', IDB_STORE = 'kv';
   var idbPromise = null;
   var DATA_AT = null;   // az éppen betöltött adat updatedAt értéke
@@ -5405,7 +5407,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   async function loadChanges() {
     try {
-      var res = await fetch('data/changes.json', { cache: 'no-cache' });
+      var res = await fetch(BASE + 'data/changes.json', { cache: 'no-cache' });
       if (!res.ok) return;
       var ch = await res.json();
       if (!ch || !ch.counts) return;
@@ -5446,7 +5448,7 @@ import * as maplibregl from 'https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dis
 
   async function loadMeta() {
     try {
-      var res = await fetch('data/repontok-meta.json', { cache: 'no-cache' });
+      var res = await fetch(BASE + 'data/repontok-meta.json', { cache: 'no-cache' });
       if (!res.ok) return;
       var m = await res.json();
       el.statAll.textContent  = (m.total || 0).toLocaleString('hu-HU');

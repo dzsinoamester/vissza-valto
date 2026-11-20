@@ -3,37 +3,35 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Vissza! — a legközelebbi palackvisszaváltó automata</title>
-<meta name="description" content="Talád meg a hozzád legközelebbi MOHU REpont visszaváltó automatát vagy kézi pontot. Sötét térkép, útvonal, nyitvatartás, SOS mód, visszajelzés.">
-<meta name="theme-color" content="#05070B">
+<title>Vissza! — a palack visszajár</title>
+<meta name="description" content="A legközelebbi MOHU REpont visszaváltó automata vagy kézi pont — élő térképen, nyitvatartással, üzemállapottal és útvonallal. 4 804 pont országszerte.">
+<meta name="theme-color" content="#070B10">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="assets/img/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Vissza!">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='20' fill='%231B6D99'/%3E%3Cpath d='M27 11h10v5.5l4.5 7.5v23.5a4.5 4.5 0 0 1-4.5 4.5H27a4.5 4.5 0 0 1-4.5-4.5V24L27 16.5z' fill='%23041017'/%3E%3Crect x='26.5' y='33' width='11' height='9' rx='2.5' fill='%231B6D99'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.16.0/dist/maplibre-gl.css" rel="stylesheet">
-<link href="css/styles.css" rel="stylesheet">
+<link href="css/landing.css" rel="stylesheet">
 </head>
 <body>
 
-<div class="stage">
-  <div id="map" aria-label="REpontok térképe"></div>
-  <div class="map-scrim" aria-hidden="true"></div>
-  <div class="map-tip" id="mapTip" hidden aria-hidden="true"></div>
-  <div class="offline-chip" id="offlineChip" hidden role="status" aria-live="polite">
-    <span class="oc-dot" aria-hidden="true"></span>Offline – mentett adatok
-  </div>
+<div class="bg" aria-hidden="true">
+  <span class="glow glow-a"></span>
+  <span class="glow glow-b"></span>
+  <span class="grid-lines"></span>
+</div>
 
-  <!-- ================= Fejléc ================= -->
-  <header class="topbar">
-    <div class="brand">
+<!-- ================= NAV ================= -->
+<header class="nav-shell">
+  <div class="nav">
+    <a class="brand" href="./" aria-label="Vissza! – főoldal">
       <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 64 64" width="34" height="34">
+        <svg viewBox="0 0 64 64" width="36" height="36">
           <defs>
             <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stop-color="#7FC9EC"/><stop offset=".55" stop-color="#1B6D99"/><stop offset="1" stop-color="#2C86B8"/>
@@ -48,915 +46,495 @@
         <strong><span class="accent">Vissza!</span></strong>
         <small>vigyél vissza!</small>
       </span>
-    </div>
+    </a>
 
-    <div class="topbar-stats" id="topStats">
-      <span class="stat"><b id="statAll">–</b>pont</span>
-      <span class="stat stat-auto"><b id="statAuto">–</b>automata</span>
-      <span class="stat stat-kezi"><b id="statKezi">–</b>kézi</span>
-    </div>
+    <nav class="nav-center" aria-label="Fő navigáció">
+      <span class="nav-pill" id="navPill" aria-hidden="true"></span>
+      <a href="#hogyan" data-nav>Hogyan működik</a>
+      <a href="#lapka" data-nav>A lapka</a>
+      <a href="#sos" data-nav>SOS</a>
+      <a href="#kozosseg" data-nav>Közösség</a>
+    </nav>
 
-    <button class="btn-sos" id="sosBtn" type="button" aria-pressed="false"
-            aria-label="Legközelebbi nyitott visszaváltó pont"
-            title="Legközelebbi NYITOTT visszaváltó pont">
-      <svg class="ico-tri" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2.6 21.4 21.4 12 17.1 2.6 21.4z" fill="currentColor"/></svg>
-      <svg class="ico-bolt" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M21.7 3.3 3.6 10.6c-1 .4-1 1.8.1 2l7.3 1.8 1.8 7.3c.2 1.1 1.6 1.1 2 .1l7.3-18.1c.4-1-.4-1.8-1.4-1.4z" fill="currentColor"/></svg>
-    </button>
-
-    <button class="recenter" id="recenterBtn" type="button" hidden aria-label="Vissza a pozíciómhoz" title="Vissza a pozíciómhoz">
-      <svg class="rec-needle" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3.2 19 20.4 12 16.6 5 20.4z" fill="currentColor"/></svg>
-    </button>
-    <div class="gps-chip" id="gpsChip" hidden></div>
-
-    <div class="map-menu" id="mapMenu" hidden role="menu" aria-label="Térkép-műveletek">
-      <button class="mm-item" type="button" role="menuitem" data-mm="nearest">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 20.6s6.6-6.1 6.6-10.6a6.6 6.6 0 1 0-13.2 0c0 4.5 6.6 10.6 6.6 10.6z"/><circle cx="12" cy="9.8" r="2.4"/></svg>
-        Legközelebbi pont
-      </button>
-      <button class="mm-item" type="button" role="menuitem" data-mm="view">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
-        Nézet ide
+    <div class="nav-right">
+      <span class="stat nav-stat"><b>4 804</b>pont</span>
+      <a class="btn btn-sos nav-cta" href="app/">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M21.7 3.3 3.6 10.6c-1 .4-1 1.8.1 2l7.3 1.8 1.8 7.3c.2 1.1 1.6 1.1 2 .1l7.3-18.1c.4-1-.4-1.8-1.4-1.4z" fill="currentColor"/></svg>
+        App megnyitása
+      </a>
+      <button class="nav-burger" id="navBurger" type="button" aria-label="Menü megnyitása" aria-expanded="false" aria-controls="mobileMenu">
+        <span></span><span></span>
       </button>
     </div>
-    <div class="map-vignette" aria-hidden="true"></div>
-    <div class="map-tip" id="mapTip" hidden></div>
-  </header>
 
-  <!-- ================= Bal oldali panel ================= -->
-  <aside class="panel" id="panel">
-    <div class="panel-grip" id="panelGrip" aria-hidden="true"></div>
+    <span class="nav-progress" aria-hidden="true"><i id="navProgress"></i></span>
+  </div>
 
-    <!-- Oldalfejléc (csak telefon/tablet) -->
-    <div class="page-head">
-      <span class="overlay-eyebrow">Keresés</span>
-      <h3>Találd meg a legközelebbi pontot</h3>
+  <div class="menu" id="mobileMenu" hidden>
+    <div class="menu-top">
+      <span class="brand-text">
+        <strong><span class="accent">Vissza!</span></strong>
+        <small>vigyél vissza!</small>
+      </span>
+      <button class="menu-close" id="menuClose" type="button" aria-label="Menü bezárása">✕</button>
     </div>
 
-    <!-- Keresés -->
-    <div class="search-block">
-      <div class="search-box">
-        <svg class="search-ico" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z" fill="currentColor"/></svg>
-        <input type="search" id="searchInput" placeholder="Település, bolt vagy cím…" autocomplete="off" aria-label="Keresés">
-        <button class="search-clear" id="searchClear" type="button" hidden aria-label="Keresés törlése">✕</button>
-      </div>
-      <div class="search-suggest" id="searchSuggest" hidden></div>
+    <nav class="menu-links" aria-label="Mobil navigáció">
+      <a href="#hogyan"><span>01</span>Hogyan működik</a>
+      <a href="#lapka"><span>02</span>A lapka</a>
+      <a href="#sos"><span>03</span>SOS</a>
+      <a href="#kozosseg"><span>04</span>Közösség</a>
+    </nav>
 
-      <div class="search-actions">
-        <button class="pill pill-locate" id="locateBtn" type="button">
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 21.5s7-6 7-11a7 7 0 1 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10.2" r="2.6"/></svg>
-          Itt vagyok
-        </button>
-        <button class="pill pill-lists" id="listsBtn" type="button" aria-expanded="false" aria-controls="listsPop">
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h11M4 12h11M4 17.5h7"/><path d="M18.5 15.2v5M16 17.7h5"/></svg>
-          Listák<i class="ft-n" id="listsCount" hidden></i>
-        </button>
-        <button class="pill pill-filter" id="filterToggle" type="button" aria-expanded="false" aria-controls="filterPop">
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
-          Szűrők<i class="ft-n" id="filterCount" hidden></i>
-        </button>
-      </div>
+    <div class="menu-foot">
+      <a class="btn btn-sos btn-lg" href="app/">App megnyitása</a>
+      <p>4 804 pont · nincs regisztráció · ingyen</p>
+    </div>
+  </div>
+</header>
 
-      <div class="active-filters" id="activeFilters" hidden></div>
+<main>
 
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="wrap hero-grid">
 
-      <div class="filter-pop" id="filterPop" hidden role="dialog" aria-label="Szűrők">
-        <div class="fp-head">
-          <b>Szűrők</b>
-          <button class="fp-x" id="filterClose" type="button" aria-label="Bezárás">✕</button>
+      <div class="hero-copy">
+        <span class="eyebrow-pill" data-reveal>
+          <i class="live-dot" aria-hidden="true"></i>
+          Élő adat · 4 804 pont országszerte
+        </span>
+
+        <h1 data-reveal>Palack a kézben?<br><em>Vidd vissza.</em></h1>
+
+        <p class="lede" data-reveal>
+          A Vissza! megmutatja a legközelebbi automatát vagy kézi pontot —
+          nyitvatartással, üzemállapottal és útvonallal, egy koppintásra.
+        </p>
+
+        <div class="hero-cta" data-reveal>
+          <a class="btn btn-sos btn-lg" href="app/">
+            Indítsd el
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+          </a>
+          <a class="btn btn-glass btn-lg" href="#hogyan">Hogyan működik?</a>
         </div>
 
-        <div class="fp-sec">
-          <span class="fp-label">Kategória és állapot</span>
-          <div class="filters" role="group" aria-label="Szűrők">
-            <button class="chip is-active" data-filter="all" type="button">Összes</button>
-            <button class="chip chip-auto" data-filter="automata" type="button">Automata</button>
-            <button class="chip chip-kezi" data-filter="kezi" type="button">Kézi</button>
-            <button class="chip chip-open" data-filter="open" type="button">Most nyitva</button>
-            <button class="chip chip-rate" data-filter="rated" type="button">Értékelt</button>
-            <button class="chip chip-fav" data-filter="fav" type="button">★ Kedvencek</button>
+        <div class="hero-chips" data-reveal>
+          <span class="stat"><b>4 804</b>pont</span>
+          <span class="stat stat-auto"><b>3 420</b>automata</span>
+          <span class="stat stat-kezi"><b>1 384</b>kézi</span>
+        </div>
+
+        <p class="hero-micro" data-reveal>Nincs telepítés · nincs regisztráció · ingyen</p>
+      </div>
+
+      <div class="hero-visual" data-reveal>
+        <div class="float-pill float-a">
+          <span class="dot dot-green" aria-hidden="true"></span>
+          Nyitva · 21:00-ig
+        </div>
+
+        <div class="map-shell">
+          <div class="lm-fallback" aria-hidden="true"></div>
+          <div id="landingMap" class="lm-canvas" aria-label="Élő térkép budapesti visszaváltó pontokkal"></div>
+
+          <div class="lm-top">
+            <span class="lc-live"><i aria-hidden="true"></i>Élő térkép</span>
+            <span class="lc-coord">BUDAPEST · 47.50 N / 19.06 E</span>
           </div>
-        </div>
 
-        <div class="fp-sec">
-          <span class="fp-label">Távolság</span>
-          <div class="dist-row" id="distRow" role="group" aria-label="Távolság">
-            <button class="dist is-active" data-dist="0" type="button">Mind</button>
-            <button class="dist" data-dist="1" type="button">1 km</button>
-            <button class="dist" data-dist="3" type="button">3 km</button>
-            <button class="dist" data-dist="5" type="button">5 km</button>
-            <button class="dist" data-dist="10" type="button">10 km</button>
-          </div>
-        </div>
-
-        <div class="fp-sec">
-          <span class="fp-label">Rendezés</span>
-          <div class="sortbar" id="sortbar" role="group" aria-label="Rendezés">
-            <button class="sort is-active" data-sort="dist" type="button">Távolság</button>
-            <button class="sort" data-sort="rating" type="button">Legjobbra értékelt</button>
-          </div>
-        </div>
-
-        <div class="fp-foot">
-          <button class="pill pill-ghost" id="filterReset" type="button">Törlés</button>
-          <button class="pill pill-primary" id="filterDone" type="button">Kész</button>
-        </div>
-      </div>
-
-      <div class="filter-pop lists-pop" id="listsPop" hidden role="dialog" aria-label="Listák">
-        <div class="fp-head">
-          <b>Listák</b>
-          <button class="fp-x" id="listsClose" type="button" aria-label="Bezárás">✕</button>
-        </div>
-        <div class="lists-row" id="listsRow" hidden></div>
-        <div class="sv-empty" id="listsEmpty">Még nincs listád – ments egy pontot a „Mentés” gombbal.</div>
-      </div>
-
-      <div class="filter-pop save-pop" id="savePop" hidden role="dialog" aria-label="Mentés listára">
-        <div class="fp-head">
-          <b>Mentés listára</b>
-          <button class="fp-x" id="saveClose" type="button" aria-label="Bezárás">✕</button>
-        </div>
-        <button class="sv-row" id="saveFavRow" type="button">
-          <span class="sv-check"></span><span class="sv-name">★ Kedvencek</span>
-        </button>
-        <div id="saveLists"></div>
-        <form class="sv-new" id="saveNewForm">
-          <input id="saveNewInput" type="text" maxlength="24" placeholder="Új lista neve…" aria-label="Új lista neve">
-          <button type="submit" aria-label="Lista létrehozása">+</button>
-        </form>
-      </div>
-    </div>
-
-    <!-- Legutóbbi látogatás -->
-    <div class="recent" id="recentCard" hidden>
-      <div class="recent-main">
-        <span class="recent-label">Legutóbb itt váltottál</span>
-        <b id="recentName">–</b>
-        <small id="recentMeta"></small>
-      </div>
-      <button class="btn btn-primary recent-go" id="recentGo" type="button">Útvonal</button>
-    </div>
-
-
-    <!-- Találatok -->
-    <div class="results-head">
-      <span id="resultsLabel">Legközelebbi pontok</span>
-      <span class="results-count" id="resultsCount"></span>
-    </div>
-    <div class="results" id="results" role="list">
-      <div class="sk-card"><span class="sk-dot"></span><span class="sk-lines"><i></i><i></i><i></i></span></div>
-      <div class="sk-card"><span class="sk-dot"></span><span class="sk-lines"><i></i><i></i><i></i></span></div>
-      <div class="sk-card"><span class="sk-dot"></span><span class="sk-lines"><i></i><i></i><i></i></span></div>
-      <div class="sk-card"><span class="sk-dot"></span><span class="sk-lines"><i></i><i></i><i></i></span></div>
-    </div>
-  </aside>
-
-  <!-- ================= Útvonal-kártya ================= -->
-  <div class="route-card" id="routeCard" hidden>
-    <div class="route-head">
-      <span class="route-eyebrow">Útvonal</span>
-      <button class="garage-chip" id="garageOpen" type="button" aria-label="Jármű kiválasztása">
-        <span class="garage-chip-ico" id="garageChipIco" aria-hidden="true"></span>
-        <span id="garageChipName">Autó</span>
-      </button>
-      <button class="route-close" id="routeClose" type="button" aria-label="Útvonal bezárása">✕</button>
-    </div>
-
-    <div class="route-modes" id="routeModes" role="group" aria-label="Közlekedési mód">
-      <button class="rmode is-active" data-mode="driving" type="button">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 16.5v2.2a1 1 0 0 0 1 1h1.2a1 1 0 0 0 1-1v-1.4h8.6v1.4a1 1 0 0 0 1 1h1.2a1 1 0 0 0 1-1v-2.2"/><path d="M3.4 16.5v-3.1L5.2 7.6A1.6 1.6 0 0 1 6.7 6.5h10.6a1.6 1.6 0 0 1 1.5 1.1l1.8 5.8v3.1A1 1 0 0 1 19.6 17H4.4a1 1 0 0 1-1-.5z"/><circle cx="7.2" cy="15" r="1.1"/><circle cx="16.8" cy="15" r="1.1"/></svg>
-        Autó
-      </button>
-      <button class="rmode" data-mode="cycling" type="button">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.8" cy="17.2" r="3.4"/><circle cx="18.2" cy="17.2" r="3.4"/><path d="M9.2 17.2h5.6l-2.4-6.2-2 2.6H6.2M14 6.4h2.4l1.8 4.6"/></svg>
-        Kerékpár
-      </button>
-      <button class="rmode" data-mode="foot" type="button">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.4" cy="4.4" r="1.9"/><path d="M10.6 21.5l1.1-5.4 1.9 1.9v3.5M11.5 16.2l-1-4.3-2.2 2.4-1.6 3.4M10.5 11.9l1.9-2.6 2.6 2.4 2.4.7"/></svg>
-        Gyalog
-      </button>
-    </div>
-
-    <div class="route-nums">
-      <div class="route-num">
-        <b id="routeDist">–</b>
-        <span>távolság</span>
-      </div>
-      <div class="route-num">
-        <b id="routeTime">–</b>
-        <span>becsült idő</span>
-      </div>
-    </div>
-
-    <div class="route-fuel" id="routeFuel" hidden></div>
-
-    <div class="route-to">
-      <span class="route-to-dot"></span>
-      <div>
-        <b id="routeName">–</b>
-        <span id="routeAddr"></span>
-      </div>
-    </div>
-
-    <div class="route-steps" id="routeSteps" hidden></div>
-    <button class="route-steps-toggle" id="routeStepsToggle" type="button" hidden>Lépések megjelenítése</button>
-
-    <!-- Lépésről lépésre kattintható előnézet (mint a nagy térképeknél) -->
-    <div class="step-nav" id="stepNav" hidden>
-      <button class="step-nav-btn" id="stepPrev" type="button" title="Előző lépés" aria-label="Előző lépés">‹</button>
-      <span class="step-nav-label" id="stepLabel">– / –</span>
-      <button class="step-nav-btn" id="stepNext" type="button" title="Következő lépés" aria-label="Következő lépés">›</button>
-      <button class="step-nav-reset" id="stepReset" type="button" title="Vissza az egész útvonalhoz">Vissza az útvonalhoz</button>
-    </div>
-
-    <div class="route-actions">
-      <button class="btn btn-primary btn-start" id="routeStart" type="button">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 2.6 21.4 21.4 12 17.1 2.6 21.4z" fill="currentColor"/></svg>
-        Indítás
-      </button>
-      <button class="btn btn-ghost" id="routeDetail" type="button">Részletek</button>
-    </div>
-  </div>
-
-  <!-- Lebegő réteg (telefon/tablet): SOS + szűrő/helyzet + legközelebbi pontok -->
-  <div class="float-stack" id="floatStack">
-    <div class="float-row">
-      <div class="map-tools" id="mapTools">
-        <button class="map-tool" id="toolFilter" type="button" title="Szűrők" aria-label="Szűrők">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
-        </button>
-        <button class="map-tool" id="toolLocate" type="button" title="Itt vagyok" aria-label="Itt vagyok">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="8.4"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg>
-        </button>
-        <button class="map-tool" id="tool3D" type="button" title="3D nézet" aria-label="3D nézet" aria-pressed="false">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5l9 4.5 9-4.5L12 3z"/><path d="m3 12.5 9 4.5 9-4.5"/><path d="m3 17 9 4.5L21 17"/></svg>
-        </button>
-      </div>
-    </div>
-    <!-- Gyors sáv: két legközelebbi pont pontszám-jelvénnyel + indulás -->
-    <div class="qbar" id="qbar" hidden>
-      <div class="qbar-list" id="qbarList"></div>
-      <button class="qbar-go" id="qbarGo" type="button" title="Indítás a legközelebbi ponthoz">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 2.6 21.4 21.4 12 17.1 2.6 21.4z" fill="currentColor"/></svg>
-      </button>
-    </div>
-  </div>
-
-  <!-- Alsó dokk (telefon + tablet) -->
-  <nav class="dock" id="dock" aria-label="Navigáció">
-    <button class="dock-btn" id="dockTop" type="button" title="Legjobbra értékelt REpontok">
-      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5.5h3V7a3 3 0 0 1-3 3M7 5.5H4V7a3 3 0 0 0 3 3"/></svg>
-      <span class="dock-label">Ranglista</span>
-    </button>
-    <button class="dock-btn" id="dockFriends" type="button" title="Barátok">
-      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 20v-1.7a3.3 3.3 0 0 0-3.3-3.3H6.3A3.3 3.3 0 0 0 3 18.3V20"/><circle cx="9.2" cy="8" r="3.3"/><path d="M17 11.3a3.3 3.3 0 0 0 0-6.5M21 20v-1.7a3.3 3.3 0 0 0-2.5-3.2"/></svg>
-      <span class="dock-label">Barátok</span>
-      <span class="dock-dot" id="dockFriendsDot" hidden></span>
-    </button>
-
-    <button class="dock-btn is-active" id="dockMap" type="button" title="Térkép">
-      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>
-      <span class="dock-label">Térkép</span>
-    </button>
-    <button class="dock-btn" id="dockProfile" type="button" title="Profilom">
-      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.3 18.4a7 7 0 0 1 11.4 0"/></svg>
-      <span class="dock-label">Profil</span>
-    </button>
-    <button class="dock-btn" id="dockSearch" type="button" title="Keresés">
-      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-      <span class="dock-label">Keresés</span>
-    </button>
-  </nav>
-
-  <!-- Iránytű / SOS — teljes képernyős -->
-  <div class="sos-view" id="sosView" hidden>
-    <div class="sos-glow" aria-hidden="true"></div>
-    <button class="sos-close" id="sosClose" type="button" aria-label="SOS bezárása">✕</button>
-
-    <div class="sos-top">
-      <span class="sos-pulse" aria-hidden="true"></span>
-      <span class="sos-eyebrow">SOS mód · a legközelebbi NYITOTT pont</span>
-    </div>
-
-    <div class="sos-center">
-      <div class="sos-compass">
-        <div class="sos-ring">
-          <svg id="sosArrow" viewBox="0 0 100 100" width="150" height="150" aria-hidden="true">
-            <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(216,224,47,.16)" stroke-width="2"/>
-            <circle cx="50" cy="50" r="46" fill="none" stroke="#1B6D99" stroke-width="2.5" stroke-dasharray="3 11" stroke-linecap="round"/>
-            <circle cx="50" cy="50" r="37" fill="rgba(216,224,47,.07)"/>
-            <path d="M50 16 L61 56 L50 48 L39 56 Z" fill="#1B6D99" stroke="#05070B" stroke-width="2" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="sos-dist" id="sosDist">–</div>
-        <div class="sos-dist-label">távolság</div>
-      </div>
-
-      <div class="sos-body">
-        <div class="sos-badge" id="sosBadge">NYITVA</div>
-        <h3 id="sosName">Keresés…</h3>
-        <p id="sosAddr"></p>
-        <div class="sos-actions">
-          <button class="btn btn-primary" id="sosGo" type="button">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
-            Indulás
-          </button>
-          <button class="btn btn-ghost" id="sosNext" type="button">Következő</button>
-          <button class="btn btn-ghost" id="sosDetail" type="button">Részletek</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="sos-more">
-      <div class="sos-more-head">További nyitott pontok a közelben</div>
-      <div class="sos-more-list" id="sosMoreList"></div>
-    </div>
-  </div>
-
-  <!-- ============ Navigációs HUD (appon belüli turn-by-turn) ============ -->
-  <div class="navview" id="navView" hidden>
-    <div class="nav-maneuver">
-      <div class="nav-arrow" id="navArrow" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="42" height="42"><path d="M12 3 4 12h4v8h8v-8h4z" fill="currentColor" transform="rotate(180 12 12)"/></svg>
-      </div>
-      <div class="nav-turn">
-        <b id="navDist">–</b>
-        <span id="navStreet">…</span>
-      </div>
-    </div>
-
-    <div class="nav-summary">
-      <div class="nav-eta"><b id="navEta">–</b><span>Érkezés</span></div>
-      <div class="nav-remain"><b id="navRemain">–</b><span>Hátra</span></div>
-      <div class="nav-total"><b id="navTotal">–</b><span>Távolság</span></div>
-      <button class="nav-nextprev" id="navStepsBtn" type="button" title="Lépések listája — végigkattinthatod az útvonalat">☰</button>
-      <button class="nav-nextprev" id="navPreview" type="button" title="Következő lépés előnézete">›</button>
-      <button class="nav-exit" id="navExit" type="button" title="Navigáció befejezése">✕</button>
-    </div>
-
-    <div class="nav-next" id="navNext" hidden></div>
-
-    <!-- Navigáció közben is kattintható lépéslista -->
-    <div class="nav-steps" id="navStepsPanel" hidden>
-      <div class="nav-steps-head">
-        <b>Útvonal lépései</b>
-        <button class="nav-steps-resume" id="navStepsResume" type="button">Vissza a navigációhoz</button>
-      </div>
-      <div class="nav-steps-list" id="navStepsList"></div>
-    </div>
-  </div>
-
-  <!-- ============ Megérkeztél ============ -->
-  <div class="arrive" id="arrive" hidden>
-    <div class="arrive-check">
-      <svg viewBox="0 0 24 24" width="46" height="46" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" fill="currentColor"/></svg>
-    </div>
-    <h2>Megérkeztél!</h2>
-    <p id="arriveName">–</p>
-    <button class="btn btn-primary" id="arriveOk" type="button">Rendben</button>
-  </div>
-
-  <!-- ============ Ranglista / Profil ============ -->
-  <div class="overlay" id="overlay" hidden>
-    <div class="overlay-card">
-      <button class="overlay-close" id="overlayClose" type="button" aria-label="Bezárás">✕</button>
-      <div class="overlay-head">
-        <span class="overlay-eyebrow" id="overlayEyebrow">Profil</span>
-        <div class="oh-row">
-          <h3 id="overlayTitle">–</h3>
-          <div class="oh-actions" id="overlayActions"></div>
-        </div>
-      </div>
-      <div id="overlayBody"></div>
-    </div>
-  </div>
-
-  <!-- ============ Első látogató: bemutató ============ -->
-  <div class="intro" id="introView" hidden role="dialog" aria-modal="true" aria-label="Bemutató: miben segít a Vissza!">
-    <div class="intro-card">
-      <div class="intro-top">
-        <span class="intro-brand">Vissza<b>!</b><em>REpont-kereső</em></span>
-        <button class="intro-skip" id="introClose" type="button" aria-label="Bemutató kihagyása">Kihagyás ✕</button>
-      </div>
-
-      <div class="intro-slides" id="introSlides">
-        <article class="intro-slide is-active">
-          <span class="intro-kicker"><b>01</b> Keresés</span>
-          <span class="intro-art" aria-hidden="true">
-            <span class="mock">
-              <span class="mock-card">
-                <span class="mock-top"><i class="mock-dot"></i> Automata</span>
-                <b>Nap Mint Nap ABC</b>
-                <span class="mock-sub">6900 Makó, Széchenyi tér 18-20</span>
-                <span class="mock-row">
-                  <span class="mock-pill is-open">Nyitva · 20:00-ig</span>
-                  <span class="mock-dist">810 m</span>
-                </span>
-              </span>
-              <span class="mock-chips">
-                <span class="mock-chip is-on">★ 4,8 · 12 értékelés</span>
-                <span class="mock-chip">Kézi gyűjtés</span>
-              </span>
-            </span>
-          </span>
-          <h3>Találd meg a legközelebbi <em>REpontot</em></h3>
-          <p>Országos lefedettség, nyitvatartás és távolság egy pillantásra — a lista a helyzetedhez igazodik.</p>
-          <ul class="intro-points">
-            <li>80+ automata</li>
-            <li>Élő nyitvatartás</li>
-            <li>Távolság a helyzetedhez</li>
-          </ul>
-        </article>
-
-        <article class="intro-slide">
-          <span class="intro-kicker"><b>02</b> Közösség</span>
-          <span class="intro-art">
-            <span class="mock">
-              <span class="mock-chips">
-                <button class="mock-chip is-on" type="button" data-state="tele" aria-pressed="true">Tele van</button>
-                <button class="mock-chip" type="button" data-state="urult" aria-pressed="false">Kiürült</button>
-                <button class="mock-chip" type="button" data-state="hibas" aria-pressed="false">Nem fogadja</button>
-              </span>
-              <span class="mock-card">
-                <span class="mock-top is-warn"><i class="mock-dot"></i> Üzemállapot</span>
-                <b data-mock-title>Tele van · 12 perce</b>
-                <span class="mock-sub" data-mock-sub>Mindenkinek látszik a térképen</span>
-                <span class="mock-row">
-                  <span class="mock-pill is-tired" data-mock-pill>2 óráig érvényes</span>
-                  <span class="mock-dist">3 jelzés</span>
-                </span>
-              </span>
-            </span>
-            <span class="art-hint">Koppints egy állapotra</span>
-          </span>
-          <h3>Lásd, <em>nyitva</em> van-e most</h3>
-          <p>A közösség jelzi, ha tele van vagy nem fogadja a palackot. A jelzés 2 óráig érvényes, és mindenkinek látszik.</p>
-          <ul class="intro-points">
-            <li>2 órás jelzés</li>
-            <li>Mindenki látja</li>
-          </ul>
-        </article>
-
-        <article class="intro-slide">
-          <span class="intro-kicker"><b>03</b> Értékelés</span>
-          <span class="intro-art">
-            <span class="mock">
-              <span class="mock-card">
-                <span class="mock-top"><i class="mock-dot"></i> Értékelés</span>
-                <span class="mock-scale"><b>8</b><span>/ 10</span></span>
-                <span class="mock-track" role="slider" tabindex="0" aria-label="Értékelés" aria-valuemin="1" aria-valuemax="10" aria-valuenow="8"><span class="mock-knob"></span></span>
-                <span class="mock-chips mock-chips-start">
-                  <button class="mock-chip" type="button" aria-pressed="false">Gyors</button>
-                  <button class="mock-chip" type="button" aria-pressed="false">Tiszta</button>
-                  <button class="mock-chip" type="button" aria-pressed="false">Kedves</button>
-                </span>
-              </span>
-            </span>
-            <span class="art-hint">Húzd a csúszkát</span>
-          </span>
-          <h3>Értékelj <em>egy húzással</em></h3>
-          <p>Pontszám és címkék — a közösség értékelései alapján látod, melyik pont gyors, tiszta vagy épp zsúfolt.</p>
-          <ul class="intro-points">
-            <li>1–10 pont</li>
-            <li>Egy húzás</li>
-          </ul>
-        </article>
-
-        <article class="intro-slide">
-          <span class="intro-kicker"><b>04</b> Ranglista</span>
-          <span class="intro-art" aria-hidden="true">
-            <span class="mock">
-              <span class="mock-list">
-                <span class="mock-item"><span class="mock-medal g">1.</span><span class="mock-name">Coop</span><span class="mock-score">8</span></span>
-                <span class="mock-item"><span class="mock-medal s">2.</span><span class="mock-name">Tesco</span><span class="mock-score">5</span></span>
-                <span class="mock-item"><span class="mock-medal b">3.</span><span class="mock-name">Penny Market</span><span class="mock-score">4</span></span>
-              </span>
-            </span>
-          </span>
-          <h3>Kövesd, ki a <em>legjobb</em></h3>
-          <p>A ranglista a legjobbra értékelt gyűjtőhelyeket mutatja — a saját értékeléseidből épül fel.</p>
-          <ul class="intro-points">
-            <li>Top 10</li>
-            <li>Saját értékelésekből</li>
-          </ul>
-        </article>
-
-        <article class="intro-slide">
-          <span class="intro-kicker"><b>05</b> Navigáció</span>
-          <span class="intro-art" aria-hidden="true">
-            <span class="mock">
-              <span class="mock-card">
-                <span class="mock-top"><i class="mock-dot"></i> Navigáció</span>
-                <span class="mock-big">810 m <span>· 2 perc</span></span>
-                <span class="mock-sub">Nap Mint Nap ABC · gyalog</span>
-                <span class="mock-row">
-                  <span class="mock-btn">▶ Indulás</span>
-                  <span class="mock-sos">SOS</span>
-                </span>
-              </span>
-            </span>
-          </span>
-          <h3>Indulj el <em>egy koppintással</em></h3>
-          <p>Valós távolság és idő, appon belüli navigáció — bajban pedig ott az SOS a legközelebbi nyitott ponttal.</p>
-          <ul class="intro-points">
-            <li>Gyalog · autó</li>
-            <li>SOS mód</li>
-          </ul>
-        </article>
-
-        <article class="intro-slide intro-slide--cta">
-          <span class="intro-kicker"><b>06</b> Fiók</span>
-          <span class="cta-art" aria-hidden="true">
-            <span class="cta-orb">
-              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.6l4.2 4.2L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </span>
-          </span>
-          <h3>Mentsd el a <em>jelzéseidet</em></h3>
-          <p>Egy fiókkal minden értékelésed és kedvenced megmarad — bármelyik eszközön, bármikor.</p>
-
-          <div class="intro-actions">
-            <button class="btn btn-primary" id="introRegister" type="button">Regisztrálok</button>
-            <div class="intro-actions-row">
-              <button class="btn btn-ghost" id="introLogin" type="button">Már van fiókom</button>
+          <div class="lm-card">
+            <div class="lm-row">
+              <span class="lm-type" id="lmType">Automata</span>
+              <span class="lm-hours" id="lmHours">Ma 6:30–21:00</span>
             </div>
-            <button class="intro-guest" id="introGuest" type="button">Csak körülnézek</button>
-            <p class="intro-note">A térkép bejelentkezés nélkül is használható.</p>
+            <b id="lmName">Lidl</b>
+            <span class="lm-addr" id="lmAddr">1074 Budapest, Rákóczi út 48–50.</span>
+            <a class="lm-open" id="lmOpen" href="app/#pont/18">
+              Megnyitás az appban
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+            </a>
+          </div>
+
+          <span class="lm-hint">Koppints egy jelölőre</span>
+        </div>
+
+        <div class="float-pill float-b">
+          <b>8,4</b>
+          <span>★ 127 szavazat</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= VÁROSOK ================= -->
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-track">
+      <span>Budapest</span><i>·</i><span>Debrecen</span><i>·</i><span>Szeged</span><i>·</i>
+      <span>Miskolc</span><i>·</i><span>Pécs</span><i>·</i><span>Győr</span><i>·</i>
+      <span>Nyíregyháza</span><i>·</i><span>Kecskemét</span><i>·</i><span>Székesfehérvár</span><i>·</i>
+      <span>Szombathely</span><i>·</i><span>Szolnok</span><i>·</i><span>Tatabánya</span><i>·</i>
+      <span>Budapest</span><i>·</i><span>Debrecen</span><i>·</i><span>Szeged</span><i>·</i>
+      <span>Miskolc</span><i>·</i><span>Pécs</span><i>·</i><span>Győr</span><i>·</i>
+      <span>Nyíregyháza</span><i>·</i><span>Kecskemét</span><i>·</i><span>Székesfehérvár</span><i>·</i>
+      <span>Szombathely</span><i>·</i><span>Szolnok</span><i>·</i><span>Tatabánya</span><i>·</i>
+    </div>
+  </div>
+
+  <!-- ================= HOGYAN ================= -->
+  <section class="sec" id="hogyan">
+    <div class="wrap">
+      <div class="sec-head" data-reveal>
+        <span class="fb-eyebrow">Hogyan működik</span>
+        <h2>Három lépés,<br>tíz másodperc.</h2>
+      </div>
+
+      <div class="steps">
+        <article class="step" data-reveal>
+          <span class="step-n">01</span>
+          <h3>Nyisd meg, és már látod</h3>
+          <p>Mind a 4 804 pont a térképen. Narancs az automata, cián a kézi pont,
+            zöld gyűrű jelzi, ha most nyitva van.</p>
+          <div class="mini-ui">
+            <span class="lm-type auto">Automata</span>
+            <span class="lm-type kezi">Kézi</span>
+            <span class="pill yes">Most nyitva</span>
+          </div>
+        </article>
+
+        <article class="step" data-reveal>
+          <span class="step-n">02</span>
+          <h3>Keress, vagy szűrj</h3>
+          <p>Település, bolt vagy cím — ékezet nélkül is. A lista távolság szerint
+            rendeződik, amint megadod, hol vagy.</p>
+          <div class="mini-search">
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+            <span>Település, bolt vagy cím…</span>
+          </div>
+        </article>
+
+        <article class="step" data-reveal>
+          <span class="step-n">03</span>
+          <h3>Indulj el</h3>
+          <p>Google, Waze vagy Apple Térkép — vagy az appon belüli útvonal,
+            lépésről lépésre, becsült idővel.</p>
+          <div class="mini-ui">
+            <span class="mini-btn">Google</span>
+            <span class="mini-btn">Waze</span>
+            <span class="mini-btn">Apple</span>
           </div>
         </article>
       </div>
+    </div>
+  </section>
 
-      <div class="intro-foot">
-        <span class="intro-count" id="introStep" aria-live="polite">1 / 6</span>
-        <div class="intro-dots" id="introDots" role="tablist" aria-label="Bemutató lépései">
-          <button class="intro-dot is-active" type="button" data-slide="0" role="tab" aria-selected="true" aria-label="1. lépés"></button>
-          <button class="intro-dot" type="button" data-slide="1" role="tab" aria-selected="false" aria-label="2. lépés"></button>
-          <button class="intro-dot" type="button" data-slide="2" role="tab" aria-selected="false" aria-label="3. lépés"></button>
-          <button class="intro-dot" type="button" data-slide="3" role="tab" aria-selected="false" aria-label="4. lépés"></button>
-          <button class="intro-dot" type="button" data-slide="4" role="tab" aria-selected="false" aria-label="5. lépés"></button>
-          <button class="intro-dot" type="button" data-slide="5" role="tab" aria-selected="false" aria-label="6. lépés"></button>
+  <!-- ================= LAPKA ================= -->
+  <section class="sec showcase" id="lapka">
+    <div class="wrap show-grid">
+
+      <div class="sheet-mock" data-reveal aria-hidden="true">
+        <span class="sheet-grip"></span>
+
+        <div class="sm-head">
+          <span class="sm-brand">Vissza!</span>
+          <span class="sm-close">✕</span>
         </div>
-        <button class="intro-next" id="introNext" type="button">Tovább <span aria-hidden="true">→</span></button>
-      </div>
-    </div>
-  </div>
 
-  <!-- ============ Bejelentkezés / Regisztráció ============ -->
-  <div class="auth" id="authView" hidden role="dialog" aria-modal="true" aria-labelledby="authTitle">
-    <div class="auth-card">
-      <button class="overlay-close" id="authClose" type="button" aria-label="Bezárás">✕</button>
-
-      <span class="overlay-eyebrow" id="authEyebrow">Fiók</span>
-      <h3 id="authTitle">Jelentkezz be</h3>
-      <p class="auth-sub" id="authSub">Az értékeléseid így minden eszközödön meglesznek.</p>
-
-      <div class="auth-tabs" id="authTabs" role="tablist" aria-label="Fiók művelet">
-        <button class="auth-tab is-active" id="authTabLogin" data-tab="login" type="button" role="tab" aria-selected="true">Bejelentkezés</button>
-        <button class="auth-tab" id="authTabRegister" data-tab="register" type="button" role="tab" aria-selected="false">Regisztráció</button>
-      </div>
-
-      <form class="auth-form" id="authForm" novalidate>
-        <label class="auth-field" id="authNameField" hidden>
-          <span>Megjelenített név</span>
-          <input type="text" id="authName" autocomplete="nickname" maxlength="40" placeholder="Pl. Kovács Anna">
-        </label>
-
-        <label class="auth-field" id="authEmailField">
-          <span>E-mail</span>
-          <input type="email" id="authEmail" autocomplete="email" inputmode="email" required placeholder="te@example.com">
-        </label>
-
-        <label class="auth-field" id="authPasswordField">
-          <span>Jelszó</span>
-          <input type="password" id="authPassword" autocomplete="current-password" placeholder="Legalább 6 karakter">
-        </label>
-
-        <label class="auth-field" id="authPassword2Field" hidden>
-          <span>Jelszó mégegyszer</span>
-          <input type="password" id="authPassword2" autocomplete="new-password" placeholder="Ismételd meg">
-        </label>
-
-        <div class="auth-msg" id="authMsg" hidden></div>
-
-        <button class="btn btn-primary auth-submit" id="authSubmit" type="submit">Bejelentkezés</button>
-
-        <div class="auth-links">
-          <button class="auth-link" id="authForgot" type="button">Elfelejtett jelszó?</button>
-          <button class="auth-link" id="authBack" type="button" hidden>← Vissza a bejelentkezéshez</button>
+        <div class="sm-title">
+          <div>
+            <span class="lm-type auto">Automata</span>
+            <h3>Lidl</h3>
+            <span class="sm-addr">1074 Budapest, Rákóczi út 48–50.</span>
+          </div>
+          <span class="sheet-rate">★ 8,4</span>
         </div>
-      </form>
 
-      <p class="auth-note">
-        A jelszót a Supabase Auth kezeli, ez az oldal nem tárolja. A fiókod bármikor törölheted
-        a profilodból — ezzel az értékeléseid is törlődnek.
-      </p>
-    </div>
-  </div>
+        <div class="sm-statusline">
+          <span class="pill yes">Nyitva</span>
+          <span class="sm-dist">218 m · 4 perc séta</span>
+        </div>
+        <div class="status-bar"><span></span></div>
 
-  <!-- Betöltés -->
-  <div class="loader" id="loader" role="status" aria-live="polite" aria-label="Betöltés">
-    <div class="ld-glow" aria-hidden="true"></div>
+        <table class="hours">
+          <tr class="is-today"><th>Ma</th><td>6:30–21:00</td></tr>
+          <tr><th>Szo</th><td>6:30–21:00</td></tr>
+          <tr><th>Vas</th><td class="closed">Zárva</td></tr>
+        </table>
 
-    <div class="ld-wrap">
-      <div class="ld-mark" aria-hidden="true">
-        <span class="ld-ring"></span>
-        <svg viewBox="0 0 64 64" width="46" height="46">
-          <defs>
-            <linearGradient id="ldg" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#7FC9EC"/><stop offset=".55" stop-color="#1B6D99"/><stop offset="1" stop-color="#2C86B8"/>
-            </linearGradient>
-          </defs>
-          <path d="M27 8h10v5.5l4.5 7.5v24a4.5 4.5 0 0 1-4.5 4.5H27a4.5 4.5 0 0 1-4.5-4.5V21l4.5-7.5z" fill="url(#ldg)"/>
-          <rect x="26.5" y="30" width="11" height="9" rx="2.5" fill="#05070B"/>
-        </svg>
+        <div class="feedback">
+          <span class="fb-eyebrow">Üzemállapot</span>
+          <div class="fb-head">
+            <h3>Tele van</h3>
+            <p>12 perce · 4 jelzés · 2 óráig érvényes</p>
+          </div>
+          <div class="report-btns">
+            <span class="report-btn is-on">Tele van</span>
+            <span class="report-btn">Kiürült</span>
+            <span class="report-btn">Nem fogadja</span>
+          </div>
+        </div>
+
+        <div class="sheet-nav">
+          <span class="sheet-nav-label">Lapka</span>
+          <span class="sheet-nav-btn is-on">Áttekintés</span>
+          <span class="sheet-nav-btn">Értékelések</span>
+          <span class="sheet-nav-btn">Jelzés</span>
+        </div>
+
+        <div class="sheet-actions">
+          <span class="sheet-act sheet-act-primary">Útvonal</span>
+          <span class="sheet-act">Mentés</span>
+          <span class="sheet-act">Megosztás</span>
+        </div>
       </div>
 
-      <div class="ld-title">Vissza<span>!</span></div>
-      <div class="ld-sub">REpont visszaváltó kereső</div>
+      <div class="show-copy">
+        <span class="fb-eyebrow" data-reveal>A lapka</span>
+        <h2 data-reveal>Minden egy lapon.</h2>
+        <p class="lede" data-reveal>
+          Nyitvatartás, üzemállapot, értékelés, jelzés és útvonal — ugyanabban a
+          panelben, amit a térképről egy koppintással nyitsz meg. Nem kell három
+          app között ugrálnod.
+        </p>
 
-      <div class="ld-track"><i></i></div>
+        <ul class="feat-rows">
+          <li data-reveal>
+            <span class="fr-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+            </span>
+            <div><b>Valós nyitvatartás</b><span>A mai nap kiemelve, a zárva lévő pontokat kiszűri.</span></div>
+          </li>
+          <li data-reveal>
+            <span class="fr-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3.5l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-3-5.3 3 1.1-6L3.4 9.8l6-.8z"/></svg>
+            </span>
+            <div><b>Értékelés és üzemállapot</b><span>1-től 10-ig, illetve „tele van / kiürült / nem fogadja”.</span></div>
+          </li>
+          <li data-reveal>
+            <span class="fr-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16"/><path d="M14 6l6 6-6 6"/></svg>
+            </span>
+            <div><b>Útvonal és megosztás</b><span>Egy koppintás, és már navigál — vagy küldd tovább egy barátnak.</span></div>
+          </li>
+        </ul>
 
-      <div class="ld-status">
-        <span class="ld-pulse" aria-hidden="true"></span>
-        <span id="loaderStatus">Adatok betöltése…</span>
+        <a class="btn btn-glass" href="app/" data-reveal>Kipróbálom az appban</a>
       </div>
 
-      <div class="ld-offline" id="loaderOffline" hidden>
-        <p class="ld-offline-title">Nincs internetkapcsolat</p>
-        <p class="ld-offline-text">Az első betöltéshez hálózat kell. Ha az appot már használtad, a mentett pontok offline is megnyílnak.</p>
-        <button class="ld-retry" id="loaderRetry" type="button">Újrapróbálás</button>
-      </div>
     </div>
+  </section>
 
-    <div class="ld-foot">MOHU REpontok · térkép · nyitvatartás</div>
-  </div>
-<!-- ================= Részletek (bottom sheet) ================= -->
-<div class="sheet-scrim" id="sheetScrim" hidden></div>
-<section class="sheet" id="sheet" hidden aria-modal="true" role="dialog">
-  <div class="sheet-grip" aria-hidden="true"></div>
+  <!-- ================= SOS ================= -->
+  <section class="sec" id="sos">
+    <div class="wrap">
+      <div class="sos-card" data-reveal>
+        <div class="sos-copy">
+          <span class="fb-eyebrow">SOS mód</span>
+          <h2>Ha most kell,<br>ne böngéssz.</h2>
+          <p>
+            Nyomd meg az SOS-t, és az app a legközelebbi <b>nyitott</b> pont felé mutat.
+            Nincs lista, nincs szűrő — csak irány és távolság.
+          </p>
+          <a class="btn btn-sos btn-lg" href="app/">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 2.6 21.4 21.4 12 17.1 2.6 21.4z" fill="currentColor"/></svg>
+            SOS kipróbálása
+          </a>
+          <p class="sos-note">A „Következő” gombbal tovább lapozhatsz a közeli pontok között.</p>
+        </div>
 
-  <div class="sheet-topbar" id="sheetTopbar">
-    <button class="sheet-icon-btn" id="sheetFavPc" type="button" aria-pressed="false" aria-label="Hozzáadás a kedvencekhez" title="Kedvencekhez">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-    </button>
-    <button class="sheet-icon-btn" id="sheetSharePc" type="button" aria-label="Megosztás (link, QR-kód)" title="Megosztás">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5.2" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="18.8" r="2.6"/><path d="M8.4 10.7 15.6 6.5M8.4 13.3l7.2 4.2"/></svg>
-    </button>
-    <button class="sheet-close-far" id="sheetClosePc" type="button" aria-label="Bezárás">✕</button>
-  </div>
-
-  <div class="sheet-col sheet-col-a">
-  <div class="sheet-hero" id="sheetHero">
-    <div class="sheet-mini" id="sheetMini" aria-hidden="true"></div>
-    <div class="sheet-hero-fade" aria-hidden="true"></div>
-    <span class="sheet-map-hint" id="sheetMapHint">Koppints a térképhez</span>
-    <span class="sheet-mini-credit" aria-hidden="true">© OpenStreetMap</span>
-
-    <span class="sheet-pin" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="30" height="30"><path d="M12 2.4c-4.3 0-7.8 3.5-7.8 7.8 0 5.8 7.8 12.2 7.8 12.2s7.8-6.4 7.8-12.2c0-4.3-3.5-7.8-7.8-7.8z" fill="rgba(216,224,47,.18)" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="10.2" r="2.7" fill="currentColor"/></svg>
-    </span>
-
-    <div class="sheet-hero-top">
-      <span class="sheet-type automata" id="sheetType">AUTOMATA</span>
-      <div class="sheet-hero-tools">
-        <button class="sheet-icon-btn" id="sheetFav" type="button" aria-pressed="false" aria-label="Hozzáadás a kedvencekhez">
-          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-        </button>
-        <button class="sheet-icon-btn" id="sheetShare" type="button" aria-label="Megosztás (link, QR-kód)" title="Megosztás">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5.2" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="18.8" r="2.6"/><path d="M8.4 10.7 15.6 6.5M8.4 13.3l7.2 4.2"/></svg>
-        </button>
-        <button class="sheet-close" id="sheetClose" type="button" aria-label="Bezárás">✕</button>
-      </div>
-    </div>
-
-    <div class="sheet-hero-body">
-      <h2 id="sheetName">–</h2>
-      <div class="sheet-addr-row">
-        <span id="sheetAddr">–</span>
-        <button class="sheet-copy" id="copyAddr" type="button" aria-label="Cím másolása" title="Cím másolása">
-          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15 5.5H6.4A1.9 1.9 0 0 0 4.5 7.4V16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <div class="sheet-status is-open" id="sheetStatusBox">
-    <div class="sheet-status-head">
-      <span class="fb-eyebrow">Állapot</span>
-      <button class="status-hours-btn" id="hoursOpen" type="button" aria-haspopup="dialog">
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.4V12l3.1 2"/></svg>
-        Nyitvatartás
-      </button>
-    </div>
-    <span class="sheet-status-text" id="sheetStatusText">–</span>
-    <span class="sheet-status-sub" id="sheetStatusSub"></span>
-    <i class="sheet-status-bar" id="sheetStatusBar" aria-hidden="true"></i>
-    <div class="sheet-status-meta">
-      <span class="sheet-dist" id="sheetDist"></span>
-      <span class="sheet-rate" id="sheetRate" hidden></span>
-      <span class="sheet-community" id="sheetCommunity" hidden></span>
-    </div>
-  </div>
-
-  <div class="sheet-actions">
-    <button class="btn btn-primary sheet-route-btn" id="sheetRoute" type="button">
-      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M12 20.6s6.6-6.1 6.6-10.6a6.6 6.6 0 1 0-13.2 0c0 4.5 6.6 10.6 6.6 10.6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="9.8" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
-      Útvonal ide
-    </button>
-    <button class="btn btn-ghost sheet-save-btn" id="sheetSave" type="button" aria-label="Mentés listára">
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 4.6l2.3 4.7 5.2.7-3.8 3.7.9 5.1-4.6-2.4-4.6 2.4.9-5.1L4.5 10l5.2-.7z"/></svg>
-      Mentés
-    </button>
-  </div>
-
-  <div class="hours-block" id="hoursBlock">
-    <div class="hours-card" id="hoursCard" role="dialog" aria-modal="true" aria-label="Nyitvatartás">
-      <button class="hours-pop-close" id="hoursClose" type="button" aria-label="Nyitvatartás bezárása">✕</button>
-      <span class="fb-eyebrow">Nyitvatartás</span>
-      <table class="hours" id="sheetHours">
-        <tbody></tbody>
-      </table>
-      <button class="hours-toggle" id="hoursToggle" type="button" aria-expanded="false">Teljes nyitvatartás</button>
-    </div>
-  </div>
-
-  <!-- ============ Üzemállapot ============ -->
-  <div class="reports" id="reportsBox">
-    <div class="reports-head">
-      <span class="fb-eyebrow">Üzemállapot</span>
-      <span class="reports-status" id="reportStatus">Nincs friss jelzés</span>
-    </div>
-    <div class="reports-stage">
-      <button class="reports-fig" id="reportFig" type="button" data-state="none" aria-expanded="false" aria-controls="reportBtns" aria-label="Üzemállapot jelentése">
-        <svg class="rfig" viewBox="0 0 128 96" aria-hidden="true">
-          <defs>
-            <clipPath id="rfigWindow"><rect x="40" y="33" width="48" height="41" rx="9"/></clipPath>
-          </defs>
-          <ellipse class="rfig-shadow" cx="64" cy="90" rx="34" ry="4.5"/>
-          <rect class="rfig-body" x="24" y="9" width="80" height="77" rx="15"/>
-          <rect class="rfig-screen" x="39" y="17" width="50" height="12" rx="4"/>
-          <path class="rfig-screen-txt" d="M44 23h11M59 23h9M72 23h12"/>
-          <circle class="rfig-led" cx="96.5" cy="23" r="3"/>
-          <rect class="rfig-slot" x="52" y="6.5" width="24" height="5" rx="2.5"/>
-          <rect class="rfig-window" x="40" y="33" width="48" height="41" rx="9"/>
-          <g clip-path="url(#rfigWindow)">
-            <rect class="rfig-fill" x="40" y="38" width="48" height="36"/>
-            <g class="rfig-cans">
-              <rect x="46" y="64" width="7" height="12" rx="2"/>
-              <rect x="56" y="67" width="7" height="9" rx="2"/>
-              <rect x="66" y="62" width="7" height="14" rx="2"/>
-              <rect x="76" y="66" width="7" height="10" rx="2"/>
-            </g>
-          </g>
-          <g class="rfig-x" aria-hidden="true">
-            <circle cx="64" cy="53" r="13"/>
-            <path d="M58.5 47.5l11 11M69.5 47.5l-11 11"/>
-          </g>
-          <g class="rfig-bottle" aria-hidden="true">
-            <rect class="rfig-bottle-body" x="-5" y="-15" width="10" height="15" rx="3"/>
-            <rect class="rfig-bottle-neck" x="-2.6" y="-21" width="5.2" height="6.5" rx="1.4"/>
-            <rect class="rfig-bottle-cap" x="-3.6" y="-23.4" width="7.2" height="3" rx="1.4"/>
-          </g>
-        </svg>
-        <span class="reports-fig-hint" id="reportFigHint">Koppints a jelzéshez</span>
-      </button>
-
-      <div class="reports-pop" id="reportsPop">
-        <span class="reports-pop-title">Mi a helyzet a géppel?</span>
-        <div class="reports-actions" id="reportBtns" role="group" aria-label="Üzemállapot jelentése">
-          <button class="report-btn" data-report="tele" type="button"><i class="rb-dot"></i>Tele van</button>
-          <button class="report-btn" data-report="urult" type="button"><i class="rb-dot"></i>Kiürült</button>
-          <button class="report-btn" data-report="hibas" type="button"><i class="rb-dot"></i>Nem fogadja</button>
+        <div class="compass-wrap" aria-hidden="true">
+          <div class="compass">
+            <svg class="needle" viewBox="0 0 120 120">
+              <path d="M60 11 L68.5 60 L60 109 L51.5 60 Z" fill="#7FC9EC"/>
+              <path d="M60 11 L68.5 60 L60 60 Z" fill="#EAF6FD"/>
+            </svg>
+            <div class="compass-read">
+              <b>218</b>
+              <span>méter</span>
+              <small>Legközelebbi nyitott</small>
+            </div>
+          </div>
+          <div class="compass-chips">
+            <span class="stat"><b>4</b>perc séta</span>
+            <span class="stat stat-auto"><b>Lidl</b>Rákóczi út</span>
+          </div>
         </div>
       </div>
     </div>
-    <p class="sheet-note reports-hint">A jelzés 1 óráig látszik a térképen. Jelenteni bejelentkezve tudsz.</p>
-  </div>
+  </section>
 
-  <!-- ============ Adathiba ============ -->
-  <div class="issues" id="issueBox">
-    <div class="issues-head">
-      <span class="fb-eyebrow">Adathiba</span>
-      <span class="issues-status" id="issueStatus">Nincs adathiba-jelzés</span>
-    </div>
-    <p class="issues-sub">Megszűnt az üzlet, rossz helyen van, vagy nem stimmel a nyitvatartás? Jelezd — átnézzük.</p>
-    <div class="issues-actions" id="issueBtns" role="group" aria-label="Adathiba jelzése">
-      <button class="issue-btn" type="button" data-issue="closed">Megszűnt</button>
-      <button class="issue-btn" type="button" data-issue="moved">Rossz helyen</button>
-      <button class="issue-btn" type="button" data-issue="hours">Nyitvatartás</button>
-      <button class="issue-btn" type="button" data-issue="other">Egyéb</button>
-    </div>
-    <input class="issue-note" id="issueNote" type="text" maxlength="280" placeholder="Megjegyzés (nem kötelező)">
-  </div>
-
-  </div>
-
-  <div class="sheet-col sheet-col-b">
-
-  <!-- ============ Visszajelzés ============ -->
-  <div class="feedback" id="feedback">
-    <div class="fb-head">
-      <span class="fb-eyebrow">Visszajelzés</span>
-      <h3>Milyen volt itt visszaváltani?</h3>
-      <p class="fb-sub">Az értékelésed segít a többieknek. Csak ezen az eszközön tárolódik.</p>
-    </div>
-
-    <!-- nagy skálázás: szám + ítélet + gradient sáv, alatta a régi 10 gomb (rejtve, a JS kezeli) -->
-    <div class="fb-scale" id="fbScale" data-empty="1">
-      <div class="fb-rings" aria-hidden="true"></div>
-      <div class="fb-big"><b id="fbBigNum">–</b><span>/10</span></div>
-      <div class="fb-verdict" id="fbVerdict">Adj pontszámot</div>
-      <div class="fb-track">
-        <input type="range" id="fbRange" min="1" max="10" step="1" value="1"
-          aria-label="Pontszám 1-től 10-ig" aria-valuetext="nincs kiválasztva">
+  <!-- ================= KÖZÖSSÉG ================= -->
+  <section class="sec" id="kozosseg">
+    <div class="wrap">
+      <div class="sec-head" data-reveal>
+        <span class="fb-eyebrow">Közösség</span>
+        <h2>A térkép, amit együtt<br>tartunk karban.</h2>
+        <p class="sec-sub">Az adat a MOHU nyilvános API-jából jön. A valóságot azok írják
+          felül, akik ott állnak a pont előtt.</p>
       </div>
-      <div class="fb-marks" aria-hidden="true"><span>1</span><span>5</span><span>10</span></div>
+
+      <div class="comm-grid">
+        <article class="comm-card" data-reveal>
+          <span class="fb-eyebrow">Élő állapot</span>
+          <h3>Tele van? Kiürült?</h3>
+          <p>Egy koppintás, két óráig érvényes. A jelzés a térképen, a listában
+            és a lapkán is látszik.</p>
+          <div class="report-btns">
+            <span class="report-btn is-on">Tele van</span>
+            <span class="report-btn">Kiürült</span>
+            <span class="report-btn">Nem fogadja</span>
+          </div>
+        </article>
+
+        <article class="comm-card" data-reveal>
+          <span class="fb-eyebrow">Értékelés</span>
+          <h3>1-től 10-ig</h3>
+          <p>Átlag és szavazatszám a kártyán, a környéked pedig a ranglistán.
+            Nem kell hozzá fiók.</p>
+          <div class="rate-row">
+            <span class="sheet-rate">★ 8,4</span>
+            <span class="rate-dots" aria-hidden="true">
+              <i style="--v:1"></i><i style="--v:1"></i><i style="--v:.75"></i><i style="--v:.4"></i><i style="--v:.1"></i>
+            </span>
+            <span class="rate-count">127 szavazat</span>
+          </div>
+        </article>
+
+        <article class="comm-card" data-reveal>
+          <span class="fb-eyebrow">Adathiba</span>
+          <h3>Megszűnt? Rossz hely?</h3>
+          <p>Jelzed, a szerkesztők látják, és lezárásnál visszajelzést kapsz.
+            A térkép így marad pontos.</p>
+          <ul class="issue-list">
+            <li><span>Megszűnt</span><b>lezárva</b></li>
+            <li><span>Rossz nyitvatartás</span><b>ellenőrizve</b></li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="badges-strip" data-reveal>
+        <span class="badges-label">Profil és jelvények</span>
+        <span class="badge-pill">Első visszaváltás</span>
+        <span class="badge-pill">10 értékelt pont</span>
+        <span class="badge-pill">5 megye</span>
+        <span class="badge-pill">Éjszakai bagoly</span>
+        <span class="badge-pill">Segítő</span>
+      </div>
     </div>
+  </section>
 
-    <div class="fb-scores" id="fbScores" role="radiogroup" aria-label="Pontszám 1-től 10-ig"></div>
-
-    <div class="fb-tags" id="fbTags" role="group" aria-label="Címkék"></div>
-
-    <label class="fb-note-label" for="fbNote">Megjegyzés (nem kötelező)</label>
-    <textarea class="fb-note" id="fbNote" rows="2" maxlength="240"
-      placeholder="Pl. sorban álltam, elfogadta az összes palackot…"></textarea>
-
-    <div class="fb-actions">
-      <button class="btn btn-primary" id="fbSend" type="button">Visszajelzés küldése</button>
-      <button class="btn btn-ghost fb-del" id="fbDelete" type="button" hidden>Törlés</button>
+  <!-- ================= SZÁMOK ================= -->
+  <section class="sec stats-sec">
+    <div class="wrap stats-grid">
+      <div class="stat-card" data-reveal><b>4 804</b><span>visszaváltó pont</span></div>
+      <div class="stat-card" data-reveal><b class="tone-auto">3 420</b><span>automata</span></div>
+      <div class="stat-card" data-reveal><b class="tone-manual">1 384</b><span>kézi pont</span></div>
+      <div class="stat-card" data-reveal><b>19 + 1</b><span>megye és Budapest</span></div>
     </div>
-    <div class="fb-done" id="fbDone" hidden>
-      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" fill="currentColor"/></svg>
-      <span></span>
-    </div>
-  </div>
+  </section>
 
-  <!-- ============ Értékelések (névvel) ============ -->
-  <div class="reviews" id="reviewsBox">
-    <div class="reviews-head">
-      <span class="fb-eyebrow">Értékelések</span>
-      <span class="reviews-status" id="reviewsStatus"></span>
-    </div>
-    <div class="reviews-list" id="reviewsList"></div>
-  </div>
-
-  <div class="sheet-note">
-    A visszaváltás mindig az adott üzlet nyitvatartásához kötött. A betétdíj (50 Ft/db) bolti
-    utalványban, a REpont appban banki átutalással vagy jótékonysági felajánlásként térül vissza.
-  </div>
-  </div>
-</section>
-
-</div>
-
-
-<!-- ============ Megosztás / QR-kód – külön felugró ablak ============ -->
-<div class="share-pop" id="sharePop" hidden>
-  <div class="share-pop-back" id="sharePopBack" aria-hidden="true"></div>
-  <div class="share-box" id="shareBox" role="dialog" aria-modal="true" aria-label="Megosztás">
-    <button class="share-pop-close" id="shareClose" type="button" aria-label="Megosztás bezárása">✕</button>
-    <div class="share-head">
-      <span class="fb-eyebrow">Megosztás</span>
-      <b id="shareTitle">–</b>
-    </div>
-    <div class="share-body">
-      <div class="share-qr" id="shareQr"></div>
-      <div class="share-main">
-        <small class="share-url" id="shareUrlText"></small>
-        <div class="share-actions">
-          <button class="btn btn-ghost" id="shareCopy" type="button">Link másolása</button>
-          <button class="btn btn-ghost" id="shareNative" type="button">Megosztás…</button>
-          <button class="btn btn-primary" id="shareFriend" type="button">Barátoknak</button>
+  <!-- ================= ZÁRÁS ================= -->
+  <section class="finale">
+    <div class="wrap">
+      <div class="finale-card" data-reveal>
+        <span class="finale-mark" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="64" height="64">
+            <defs>
+              <linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#7FC9EC"/><stop offset=".55" stop-color="#1B6D99"/><stop offset="1" stop-color="#2C86B8"/>
+              </linearGradient>
+            </defs>
+            <rect width="64" height="64" rx="20" fill="url(#lg2)"/>
+            <path d="M27 11h10v5.5l4.5 7.5v23.5a4.5 4.5 0 0 1-4.5 4.5H27a4.5 4.5 0 0 1-4.5-4.5V24L27 16.5z" fill="#05070B"/>
+            <rect x="26.5" y="33" width="11" height="9" rx="2.5" fill="url(#lg2)"/>
+          </svg>
+        </span>
+        <h2>Vidd vissza.<br><em>Ma.</em></h2>
+        <p>Nyisd meg, engedj hozzáférést a helyzetedhez, és már mutatjuk is,
+          merre van a legközelebbi visszaváltó.</p>
+        <div class="finale-cta">
+          <a class="btn btn-sos btn-lg" href="app/">
+            Alkalmazás megnyitása
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+          </a>
+          <a class="btn btn-glass btn-lg" href="app/?go=search">Keresés indítása</a>
         </div>
-        <p class="share-hint">Olvasd be a QR-kódot, vagy küldd el egy barátodnak — a link a pont részleteit nyitja meg.</p>
+        <p class="finale-note">Az adatok a MOHU nyilvános térkép-adatbázisából származnak.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-top">
+    <div class="foot-brand">
+      <a class="brand" href="./" aria-label="Vissza! – főoldal">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="42" height="42">
+            <rect width="64" height="64" rx="20" fill="#1B6D99"/>
+            <path d="M27 11h10v5.5l4.5 7.5v23.5a4.5 4.5 0 0 1-4.5 4.5H27a4.5 4.5 0 0 1-4.5-4.5V24L27 16.5z" fill="#05070B"/>
+            <rect x="26.5" y="33" width="11" height="9" rx="2.5" fill="#7FC9EC"/>
+          </svg>
+        </span>
+        <span class="brand-text">
+          <strong><span class="accent">Vissza!</span></strong>
+          <small>vigyél vissza!</small>
+        </span>
+      </a>
+
+      <p class="foot-tag">A palack visszajár. A Vissza! megmutatja, hova vidd —
+        a legközelebbi automatától a sarki kézi pontig.</p>
+
+      <div class="foot-status">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span><b>4 804</b> pont · frissítve 2026. 10. 31.</span>
+      </div>
+
+      <a class="btn btn-sos" href="app/">
+        App megnyitása
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+      </a>
+    </div>
+
+    <div class="foot-cols">
+      <div class="foot-col">
+        <span class="foot-label">Alkalmazás</span>
+        <a href="app/">Megnyitás</a>
+        <a href="app/?go=search">Keresés</a>
+        <a href="app/?go=profile">Profilom</a>
+        <a href="app/">SOS mód</a>
+      </div>
+      <div class="foot-col">
+        <span class="foot-label">Adat</span>
+        <a href="https://map.mohu.hu/" target="_blank" rel="noopener">MOHU térkép</a>
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
+        <a href="app/">Adathiba jelzése</a>
+        <span class="plain">2026. 10. 31.</span>
+      </div>
+      <div class="foot-col">
+        <span class="foot-label">Névjegy</span>
+        <span class="plain">Független projekt</span>
+        <span class="plain">Nem hivatalos app</span>
+        <span class="plain">v6.7.1</span>
       </div>
     </div>
   </div>
-</div>
 
-<!-- ============ Garázs – járműválasztás ============ -->
-<div class="garage" id="garage" hidden>
-  <div class="garage-back" id="garageBack" aria-hidden="true"></div>
-  <div class="garage-box" role="dialog" aria-modal="true" aria-labelledby="garageTitle">
-    <button class="share-pop-close" id="garageClose" type="button" aria-label="Bezárás">✕</button>
-    <div class="garage-head">
-      <span class="fb-eyebrow">Garázs</span>
-      <b id="garageTitle">Mivel jársz?</b>
-      <p class="garage-sub">A járművedhez igazítjuk az útvonalat, a becsült időt és az üzemanyagköltséget.</p>
-    </div>
-    <div class="garage-list" id="garageList" role="radiogroup" aria-label="Járművek"></div>
-    <div class="garage-foot">
-      <button class="btn btn-ghost" id="garageAdd" type="button">Új jármű</button>
-      <button class="btn btn-primary" id="garageSave" type="button">Ez az enyém</button>
-    </div>
+  <div class="wrap foot-bottom">
+    <span>© 2026 Vissza! · Minden jog fenntartva</span>
+    <span class="foot-credit">Térképadatok © OpenStreetMap közreműködők</span>
+    <button class="to-top" id="toTop" type="button">
+      Vissza a tetejére
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V6M6 12l6-6 6 6"/></svg>
+    </button>
   </div>
 
-</div>
+  <div class="foot-mark" aria-hidden="true">Vissza!</div>
+</footer>
 
-<div class="toast" id="toast" hidden></div>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="js/config.js"></script>
-<script type="module" src="js/app.js"></script>
+<script src="js/landing.js"></script>
 </body>
 </html>

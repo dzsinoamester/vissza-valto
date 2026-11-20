@@ -2,9 +2,10 @@
   "name": "Vissza! — REpont kereső",
   "short_name": "Vissza!",
   "description": "A legközelebbi MOHU REpont visszaváltó automata vagy kézi pont – térképen, nyitvatartással, útvonallal.",
+  "id": "app/",
   "lang": "hu",
   "dir": "ltr",
-  "start_url": "./?src=pwa",
+  "start_url": "app/?src=pwa",
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
@@ -18,7 +19,7 @@
     { "src": "assets/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Keresés", "url": "./?go=search" },
-    { "name": "Profilom", "url": "./?go=profile" }
+    { "name": "Keresés", "url": "app/?go=search" },
+    { "name": "Profilom", "url": "app/?go=profile" }
   ]
 }
