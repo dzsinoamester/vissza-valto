@@ -1,59 +1,14 @@
 {
- "at": "2026-11-21T11:09:55.562Z",
+ "at": "2026-11-22T11:29:56.951Z",
  "counts": {
   "total": 4799,
-  "added": 11,
-  "removed": 6,
+  "added": 0,
+  "removed": 0,
   "moved": 0,
-  "hours": 1
+  "hours": 0
  },
- "added": [
-  6522,
-  6523,
-  6524,
-  6525,
-  6526,
-  6527,
-  6528,
-  6529,
-  6530,
-  6531,
-  6532
- ],
- "removed": [
-  {
-   "id": 3408,
-   "name": "RONI ABC",
-   "city": "Mórahalom"
-  },
-  {
-   "id": 3570,
-   "name": "Szatócsbolt Mohl László",
-   "city": "Iszkaszentgyörgy"
-  },
-  {
-   "id": 3757,
-   "name": "Pityóka Söröző",
-   "city": "Veszprém"
-  },
-  {
-   "id": 3968,
-   "name": "Sarki Bolt Deák F. u.",
-   "city": "Tata"
-  },
-  {
-   "id": 5491,
-   "name": "Rönk Abc",
-   "city": "Kecskemét"
-  },
-  {
-   "id": 5708,
-   "name": "Fenyves Söröző",
-   "city": "Veszprém"
-  }
- ],
+ "added": [],
+ "removed": [],
  "moved": [],
- "hours": [
-  6099
- ]
+ "hours": []
 }
